@@ -107,7 +107,7 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
     pdf.set_font("Arial", 'B', 10)
     pdf.cell(180, 6, f"  2. EFECTIVO NETO: $ {efectivo_neto:,.2f}  [{pct_efc:.1f}%]", ln=1, fill=True)
     pdf.set_font("Arial", '', 9)
-    pdf.cell(130, 5, "      - Recuento Total Cajón"); pdf.cell(40, 5, f"$ {total_fisico:,.2f}", align='R', ln=1)
+    pdf.cell(130, 5, "      - Recuento Total"); pdf.cell(40, 5, f"$ {total_fisico:,.2f}", align='R', ln=1)
     pdf.cell(130, 5, "      - (Menos) Caja Inicial"); pdf.cell(40, 5, f"-$ {caja_inicial:,.2f}", align='R', ln=1)
     
     pdf.ln(2); pdf.set_font("Arial", 'B', 9)
