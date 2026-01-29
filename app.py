@@ -78,7 +78,7 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
         pdf.cell(130, 7, texto, border=0)
         pdf.cell(50, 7, f"$ {monto:,.2f}", border=0, align='R', ln=1)
 
-    linea_resumen("FACTURACIÓN BALANZA (Objetivo):", balanza, True)
+    linea_resumen("FACTURACIÓN BALANZA:", balanza, True)
     linea_resumen("TOTAL JUSTIFICADO:", balanza - diferencia)
     pdf.set_text_color(100, 100, 100)
     linea_resumen("Ticket Fiscal (Registradora):", registradora)
