@@ -1,247 +1,278 @@
 import streamlit as st
+import pandas as pd
 from datetime import datetime
-from io import BytesIO
-from reportlab.lib.pagesizes import letter
-from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-from reportlab.lib.units import inch
+from fpdf import FPDF
+import os
 
-st.set_page_config(page_title="Cierre de Caja", layout="wide", page_icon="💰")
+# --- 1. CONFIGURACIÓN MINIMALISTA ---
+st.set_page_config(page_title="Cierre de Caja", layout="wide")
 
-# Estilos personalizados
-st.markdown("""
-<style>
-    .big-metric {
-        font-size: 2.5rem !important;
-        font-weight: bold;
-    }
-    .stMetric {
-        background-color: #f0f2f6;
-        padding: 15px;
-        border-radius: 10px;
-    }
-</style>
-""", unsafe_allow_html=True)
+# Ocultar menú de hamburguesa y footer para limpieza visual absoluta
+hide_st_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            </style>
+            """
+st.markdown(hide_st_style, unsafe_allow_html=True)
 
-st.title("💰 Cierre de Caja")
+# --- 2. INICIALIZACIÓN DE VARIABLES (SEGURIDAD) ---
+# Creamos las tablas en memoria si no existen
+if 'df_salidas' not in st.session_state: st.session_state.df_salidas = pd.DataFrame(columns=["Descripción", "Monto"])
+if 'df_vales' not in st.session_state: st.session_state.df_vales = pd.DataFrame(columns=["Descripción", "Monto"])
+if 'df_errores' not in st.session_state: st.session_state.df_errores = pd.DataFrame(columns=["Monto"])
+if 'df_descuentos' not in st.session_state: st.session_state.df_descuentos = pd.DataFrame(columns=["Monto"])
+
+# Limpieza preventiva por cambios de estructura anteriores
+if 'Descripción' in st.session_state.df_errores.columns: st.session_state.df_errores = pd.DataFrame(columns=["Monto"])
+if 'Descripción' in st.session_state.df_descuentos.columns: st.session_state.df_descuentos = pd.DataFrame(columns=["Monto"])
+
+# --- 3. FUNCIÓN GENERADORA DE PDF ---
+def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital, efectivo_neto, 
+                            caja_inicial, total_fisico, caja_proxima, retiro,
+                            df_salidas, df_errores, df_vales, df_descuentos, diferencia, desglose_digital):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_margins(15, 15, 15)
+    
+    # -- ENCABEZADO --
+    if os.path.exists("logo.png"):
+        try: pdf.image("logo.png", 15, 10, 30)
+        except: pass 
+
+    pdf.set_xy(50, 12)
+    pdf.set_font("Arial", 'B', 18)
+    pdf.cell(0, 10, "ESTANCIA SAN FRANCISCO", ln=1)
+    pdf.set_xy(50, 20)
+    pdf.set_font("Arial", '', 12)
+    pdf.cell(0, 8, "Reporte de Cierre de Caja", ln=1)
+
+    pdf.set_xy(140, 12)
+    pdf.set_font("Arial", 'B', 10)
+    pdf.cell(50, 6, f"FECHA: {fecha.strftime('%d/%m/%Y')}", ln=1, align='R')
+    pdf.set_x(140)
+    pdf.cell(50, 6, f"CAJERO: {cajero}", ln=1, align='R')
+    
+    pdf.ln(15)
+    pdf.line(15, pdf.get_y(), 195, pdf.get_y())
+    pdf.ln(5)
+
+    # -- CAJA RESULTADO --
+    y_start_box = pdf.get_y()
+    estado, color_texto = "OK", (0, 0, 0)
+    if diferencia > 0: estado, color_texto = "FALTANTE", (200, 0, 0)
+    elif diferencia < 0: estado, color_texto = "SOBRANTE", (0, 100, 0)
+        
+    pdf.set_font("Arial", 'B', 14)
+    pdf.set_text_color(*color_texto)
+    pdf.cell(0, 10, f"CAJA REAL (Diferencia): $ {diferencia:,.2f} ({estado})", ln=1, align='C')
+    pdf.set_text_color(0, 0, 0)
+    pdf.rect(15, y_start_box, 180, 10)
+    pdf.ln(5)
+
+    # -- RESUMEN --
+    pdf.set_font("Arial", '', 11)
+    def linea_resumen(texto, monto, es_negrita=False):
+        pdf.set_font("Arial", 'B' if es_negrita else '', 11)
+        pdf.cell(130, 7, texto, border=0)
+        pdf.cell(50, 7, f"$ {monto:,.2f}", border=0, align='R', ln=1)
+
+    linea_resumen("FACTURACIÓN BALANZA (Objetivo):", balanza, True)
+    linea_resumen("TOTAL JUSTIFICADO:", balanza - diferencia)
+    pdf.set_text_color(100, 100, 100)
+    linea_resumen("Ticket Fiscal (Registradora):", registradora)
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(5); pdf.line(15, pdf.get_y(), 195, pdf.get_y()); pdf.ln(5)
+
+    # -- KPIs --
+    total_venta = total_digital + efectivo_neto
+    pct_dig = (total_digital / total_venta * 100) if total_venta > 0 else 0
+    pct_efc = (efectivo_neto / total_venta * 100) if total_venta > 0 else 0
+
+    # -- SECCIÓN A: INGRESOS --
+    pdf.set_font("Arial", 'B', 12); pdf.cell(0, 8, "A. DINERO INGRESADO", ln=1); pdf.ln(2)
+    
+    # 1. Digital
+    pdf.set_font("Arial", 'B', 10); pdf.set_fill_color(240, 240, 240)
+    pdf.cell(180, 6, f"  1. DIGITAL: $ {total_digital:,.2f}  [{pct_dig:.1f}%]", ln=1, fill=True)
+    pdf.set_font("Arial", '', 9)
+    for k, v in desglose_digital.items():
+        if v > 0:
+            pct_int = (v/total_digital*100) if total_digital else 0
+            pdf.cell(130, 5, f"      - {k} ({pct_int:.1f}%)"); pdf.cell(40, 5, f"$ {v:,.2f}", align='R', ln=1)
+    pdf.ln(3)
+
+    # 2. Efectivo
+    pdf.set_font("Arial", 'B', 10)
+    pdf.cell(180, 6, f"  2. EFECTIVO NETO: $ {efectivo_neto:,.2f}  [{pct_efc:.1f}%]", ln=1, fill=True)
+    pdf.set_font("Arial", '', 9)
+    pdf.cell(130, 5, "      - Recuento Total Cajón"); pdf.cell(40, 5, f"$ {total_fisico:,.2f}", align='R', ln=1)
+    pdf.cell(130, 5, "      - (Menos) Caja Inicial"); pdf.cell(40, 5, f"-$ {caja_inicial:,.2f}", align='R', ln=1)
+    
+    pdf.ln(2); pdf.set_font("Arial", 'B', 9)
+    pdf.cell(130, 5, "DESTINO DEL EFECTIVO:", ln=1); pdf.set_font("Arial", '', 9)
+    pdf.cell(130, 5, "      -> Queda (Caja Próximo Día):"); pdf.cell(40, 5, f"$ {caja_proxima:,.2f}", align='R', ln=1)
+    pdf.cell(130, 5, "      -> Se Retira:"); pdf.cell(40, 5, f"$ {retiro:,.2f}", align='R', ln=1)
+    pdf.ln(5)
+    
+    # -- SECCIÓN B: AJUSTES (CON GRILLA) --
+    pdf.set_font("Arial", 'B', 12); pdf.cell(0, 8, "B. AJUSTES Y SALIDAS", ln=1); pdf.ln(2)
+
+    def dibujar_tabla(titulo, df, estilo="lista", label_fijo=None):
+        if df.empty or df['Monto'].sum() == 0: return
+        
+        pdf.set_font("Arial", 'B', 10)
+        pdf.cell(180, 6, f"  {titulo} (Total: $ {df['Monto'].sum():,.2f})", ln=1, fill=True)
+        pdf.set_font("Arial", '', 9)
+        
+        if estilo == 'grilla':
+            # MODO GRILLA (4 Columnas)
+            col_count = 0
+            ancho_col = 45 
+            for _, row in df.iterrows():
+                if row['Monto'] > 0:
+                    pdf.cell(ancho_col, 6, f"$ {row['Monto']:,.0f}", align='C', border=0)
+                    col_count += 1
+                    if col_count % 4 == 0: pdf.ln()
+            if col_count % 4 != 0: pdf.ln()
+                
+        else:
+            # MODO LISTA
+            for _, row in df.iterrows():
+                if row['Monto'] > 0:
+                    txt = str(row['Descripción']) if estilo == 'lista' else label_fijo
+                    pdf.cell(130, 5, f"      - {txt}"); pdf.cell(40, 5, f"$ {row['Monto']:,.2f}", align='R', ln=1)
+        pdf.ln(2)
+
+    dibujar_tabla("3. GASTOS / SALIDAS", df_salidas, estilo='lista')
+    dibujar_tabla("4. VALES / FIADOS", df_vales, estilo='lista')
+    dibujar_tabla("5. ERRORES DE BALANZA", df_errores, estilo='fijo', label_fijo="Error de Facturación")
+    dibujar_tabla("6. DESCUENTOS AVELLANEDA", df_descuentos, estilo='grilla')
+
+    pdf.line(15, pdf.get_y(), 195, pdf.get_y()); pdf.ln(2)
+    pdf.set_font("Arial", 'B', 9); pdf.cell(0, 5, "OBSERVACIONES:", ln=1)
+    return pdf.output(dest="S").encode("latin-1")
+
+# --- 4. INTERFAZ UI ---
+
+st.markdown("## Cierre de Caja")
+st.markdown("Estancia San Francisco")
+
+# CABECERA
+c_head1, c_head2, c_head3 = st.columns([1, 1, 2])
+with c_head1: fecha_input = st.date_input("Fecha", datetime.today())
+with c_head2: cajero = st.text_input("Cajero", "Santiago")
+with c_head3: pass
+
 st.markdown("---")
 
-# DATOS BÁSICOS
-col_fecha, col_caja = st.columns(2)
-with col_fecha:
-    fecha = st.date_input("📅 Fecha", value=datetime.now())
-with col_caja:
-    nombre_caja = st.text_input("🏪 Nombre de Caja", placeholder="Ej: Caja Principal")
+# LAYOUT PRINCIPAL
+col_izq, col_der = st.columns(2, gap="large")
 
+with col_izq:
+    st.subheader("1. Ingresos Digitales & Facturación")
+    with st.container(border=True):
+        c1, c2 = st.columns(2)
+        with c1: balanza_total = st.number_input("Total BALANZA ($)", 0.0, step=100.0)
+        with c2: registradora_total = st.number_input("Ticket Z (Fiscal)", 0.0, step=100.0)
+
+    st.caption("Terminales / Posnets")
+    with st.container(border=True):
+        c_pos1, c_pos2 = st.columns(2)
+        with c_pos1:
+            mp = st.number_input("Mercado Pago", 0.0, step=100.0)
+            nave = st.number_input("Nave", 0.0, step=100.0)
+        with c_pos2:
+            clover = st.number_input("Clover", 0.0, step=100.0)
+            bbva = st.number_input("BBVA", 0.0, step=100.0)
+    
+    total_digital = mp + nave + clover + bbva
+    if total_digital > 0: st.info(f"Total Digital: ${total_digital:,.2f}")
+
+with col_der:
+    st.subheader("2. Arqueo de Efectivo")
+    with st.container(border=True):
+        st.caption("Calculadora de Billetes")
+        col_b1, col_b2, col_b3, col_b4 = st.columns(4)
+        with col_b1: b_20000 = st.number_input("$ 20.000", 0); b_500 = st.number_input("$ 500", 0)
+        with col_b2: b_10000 = st.number_input("$ 10.000", 0); b_200 = st.number_input("$ 200", 0)
+        with col_b3: b_2000 = st.number_input("$ 2.000", 0); b_100 = st.number_input("$ 100", 0)
+        with col_b4: b_1000 = st.number_input("$ 1.000", 0); monedas = st.number_input("Monedas $", 0.0)
+
+        total_fisico = (b_20000*20000)+(b_10000*10000)+(b_2000*2000)+(b_1000*1000)+(b_500*500)+(b_200*200)+(b_100*100)+monedas
+        st.markdown(f"**Total Contado: ${total_fisico:,.2f}**")
+        
+        caja_inicial = st.number_input("(-) Caja Inicial / Apertura", 0.0, step=100.0)
+        efectivo_neto = total_fisico - caja_inicial
+        
+        if efectivo_neto < 0: st.error(f"Faltante físico: ${efectivo_neto:,.2f}")
+        else: st.caption(f"Efectivo Neto Ventas: ${efectivo_neto:,.2f}")
+
+    with st.container(border=True):
+        st.caption("Destino del Efectivo")
+        c_dest1, c_dest2 = st.columns(2)
+        with c_dest1: caja_proxima = st.number_input("Para Mañana", 0.0, step=100.0)
+        with c_dest2: 
+            retiro = total_fisico - caja_proxima
+            st.metric("Se Retira", f"${retiro:,.2f}")
+
+# SECCIÓN INFERIOR
 st.markdown("---")
+st.subheader("3. Ajustes de Caja")
 
-# SECCIÓN: FACTURACIÓN
-st.subheader("📊 Facturación del Día")
-col1, col2, col3 = st.columns(3)
-with col1:
-    balanza = st.number_input("💵 BALANZA (Total Facturado)", min_value=0.0, value=0.0, step=100.0, format="%.2f")
-with col2:
-    registradora = st.number_input("🧾 REGISTRADORA (Tickets Fiscales)", min_value=0.0, value=0.0, step=100.0, format="%.2f", help="Solo para comparar con pagos digitales")
-with col3:
-    somos_a = st.number_input("🎁 SOMOS A (Descuentos)", min_value=0.0, value=0.0, step=10.0, format="%.2f", help="Descuentos aplicados lunes y miércoles")
+col_ajustes1, col_ajustes2 = st.columns(2)
 
+def tabla_min(titulo, key, help_txt, solo_monto=False):
+    cfg = {"Monto": st.column_config.NumberColumn("($)", format="$%d")}
+    if not solo_monto:
+        cfg["Descripción"] = st.column_config.TextColumn("Detalle", required=True)
+    
+    st.caption(f"**{titulo}**")
+    df = st.data_editor(st.session_state[key], column_config=cfg, num_rows="dynamic", use_container_width=True, key=f"ed_{key}")
+    return df, (df["Monto"].sum() if not df.empty else 0.0)
+
+with col_ajustes1:
+    df_salidas, total_salidas = tabla_min("Gastos / Salidas", "df_salidas", "")
+    df_errores, total_errores = tabla_min("Errores Facturación", "df_errores", "", True)
+
+with col_ajustes2:
+    df_vales, total_vales = tabla_min("Vales / Fiados", "df_vales", "")
+    
+    dia_semana = fecha_input.weekday()
+    total_descuentos = 0.0
+    df_descuentos = pd.DataFrame(columns=["Monto"])
+    # Solo mostrar tabla si es Lunes(0) o Miércoles(2)
+    if dia_semana in [0, 2]: 
+        df_descuentos, total_descuentos = tabla_min("Desc. Somos Avellaneda", "df_descuentos", "", True)
+
+# CÁLCULOS
+total_justificado = total_digital + efectivo_neto + total_salidas + total_errores + total_vales + total_descuentos
+diferencia = balanza_total - total_justificado
+
+# BARRA RESULTADO
 st.markdown("---")
+c_res1, c_res2, c_res3 = st.columns([1, 2, 1])
 
-# SECCIÓN: INGRESOS
-st.subheader("💳 Ingresos de Dinero")
-col4, col5 = st.columns(2)
-with col4:
-    cambio_ayer = st.number_input("💵 Cambio de AYER (a restar)", min_value=0.0, value=0.0, step=10.0, format="%.2f", help="Dinero que quedó ayer en la registradora")
-    efectivo = st.number_input("💵 EFECTIVO", min_value=0.0, value=0.0, step=100.0, format="%.2f")
-    efectivo_neto = efectivo - cambio_ayer
-    st.info(f"**Efectivo neto del día:** ${efectivo_neto:,.2f}")
+with c_res1:
+    st.metric("Total Balanza", f"${balanza_total:,.2f}")
+    st.caption(f"Justificado: ${total_justificado:,.2f}")
 
-with col5:
-    vales = st.number_input("🎫 VALES", min_value=0.0, value=0.0, step=10.0, format="%.2f")
-    transferencias = st.number_input("🏦 TRANSFERENCIAS", min_value=0.0, value=0.0, step=100.0, format="%.2f")
+with c_res2:
+    lbl = "CAJA REAL (Diferencia)"
+    val = f"${diferencia:,.2f}"
+    if diferencia > 0: st.metric(lbl, val, "- Faltante", delta_color="inverse")
+    elif diferencia < 0: st.metric(lbl, val, "+ Sobrante")
+    else: st.metric(lbl, val, "OK")
 
-st.markdown("**Pagos Electrónicos:**")
-col6, col7, col8 = st.columns(3)
-with col6:
-    mercadopago = st.number_input("📱 MERCADO PAGO", min_value=0.0, value=0.0, step=100.0, format="%.2f")
-with col7:
-    getnet = st.number_input("💳 GETNET", min_value=0.0, value=0.0, step=100.0, format="%.2f")
-with col8:
-    clover = st.number_input("💳 CLOVER (POSNET)", min_value=0.0, value=0.0, step=100.0, format="%.2f")
-
-st.markdown("---")
-
-# SECCIÓN: AJUSTES
-st.subheader("⚙️ Ajustes y Salidas")
-col9, col10 = st.columns(2)
-with col9:
-    errores = st.number_input("⚠️ ERRORES (Ajustes del día)", value=0.0, step=10.0, format="%.2f", help="Errores que surgieron durante el día")
-with col10:
-    salida_caja = st.number_input("📤 SALIDA DE CAJA", min_value=0.0, value=0.0, step=10.0, format="%.2f", help="Pagos a proveedores, compras, etc.")
-
-st.markdown("---")
-
-# SECCIÓN: CAMBIO PARA MAÑANA
-st.subheader("🔄 Cambio para Mañana")
-cambio_manana = st.number_input("💵 Dinero que queda para MAÑANA", min_value=0.0, value=0.0, step=10.0, format="%.2f", help="Dinero que quedará en la registradora")
-
-st.markdown("---")
-
-# ============= CÁLCULOS =============
-total_pagos_digitales = mercadopago + getnet + clover
-total_ingresos = efectivo_neto + mercadopago + getnet + clover + transferencias + vales
-
-# FÓRMULA: CAJA REAL = BALANZA - SOMOS_A - ERRORES - INGRESOS + SALIDAS
-caja_real = balanza - somos_a - errores - total_ingresos + salida_caja
-
-# Comparación registradora vs pagos digitales
-diferencia_registradora = registradora - total_pagos_digitales
-
-dinero_a_retirar = efectivo_neto - cambio_manana
-
-# ============= RESULTADOS =============
-st.header("📈 RESULTADO DEL CIERRE")
-
-# Métrica principal: CAJA REAL
-if abs(caja_real) < 0.01:
-    st.success("## ✅ ¡CAJA PERFECTA!")
-    color_caja = "success"
-elif caja_real < 0:
-    st.warning(f"## ⚠️ SOBRAN ${abs(caja_real):,.2f}")
-    color_caja = "warning"
-else:
-    st.error(f"## ❌ FALTAN ${caja_real:,.2f}")
-    color_caja = "error"
-
-st.markdown("---")
-
-# Métricas adicionales
-col_res1, col_res2, col_res3, col_res4 = st.columns(4)
-
-with col_res1:
-    st.metric("💰 Caja Real", f"${caja_real:,.2f}")
-    
-with col_res2:
-    st.metric("💵 Efectivo Neto", f"${efectivo_neto:,.2f}")
-    st.metric("💰 A Retirar Hoy", f"${dinero_a_retirar:,.2f}")
-
-with col_res3:
-    st.metric("💳 Pagos Digitales", f"${total_pagos_digitales:,.2f}")
-    if abs(diferencia_registradora) < 0.01:
-        st.success("✅ Registradora OK")
-    else:
-        st.info(f"ℹ️ Dif: ${diferencia_registradora:,.2f}")
-
-with col_res4:
-    st.metric("📊 Total Ingresos", f"${total_ingresos:,.2f}")
-    st.metric("💵 Cambio Mañana", f"${cambio_manana:,.2f}")
-
-st.markdown("---")
-
-# ============= GENERAR PDF =============
-def generar_pdf():
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch)
-    elementos = []
-    
-    # Estilos
-    styles = getSampleStyleSheet()
-    titulo_style = ParagraphStyle('TituloCustom', parent=styles['Heading1'], fontSize=20, textColor=colors.HexColor('#1f77b4'), spaceAfter=20, alignment=1)
-    
-    # Título
-    titulo = Paragraph(f"<b>CIERRE DE CAJA</b>", titulo_style)
-    elementos.append(titulo)
-    
-    fecha_texto = Paragraph(f"<b>Fecha:</b> {fecha.strftime('%d/%m/%Y')} | <b>Caja:</b> {nombre_caja}", styles['Normal'])
-    elementos.append(fecha_texto)
-    elementos.append(Spacer(1, 0.3*inch))
-    
-    # Tabla de datos
-    datos = [
-        ['CONCEPTO', 'VALOR'],
-        ['', ''],
-        ['BALANZA', f'$ {balanza:,.2f}'],
-        ['REGISTRADORA', f'$ {registradora:,.2f}'],
-        ['SOMOS A (Descuentos)', f'$ {somos_a:,.2f}'],
-        ['', ''],
-        ['EFECTIVO', f'$ {efectivo:,.2f}'],
-        ['Cambio de ayer', f'$ -{cambio_ayer:,.2f}'],
-        ['EFECTIVO NETO', f'$ {efectivo_neto:,.2f}'],
-        ['', ''],
-        ['MERCADO PAGO', f'$ {mercadopago:,.2f}'],
-        ['GETNET', f'$ {getnet:,.2f}'],
-        ['CLOVER (POSNET)', f'$ {clover:,.2f}'],
-        ['TOTAL PAGOS DIGITALES', f'$ {total_pagos_digitales:,.2f}'],
-        ['', ''],
-        ['TRANSFERENCIAS', f'$ {transferencias:,.2f}'],
-        ['VALES', f'$ {vales:,.2f}'],
-        ['', ''],
-        ['ERRORES', f'$ {errores:,.2f}'],
-        ['SALIDA DE CAJA', f'$ {salida_caja:,.2f}'],
-        ['', ''],
-        ['DIFERENCIA REGISTRADORA', f'$ {diferencia_registradora:,.2f}'],
-        ['', ''],
-        ['CAMBIO PARA MAÑANA', f'$ {cambio_manana:,.2f}'],
-        ['DINERO A RETIRAR HOY', f'$ {dinero_a_retirar:,.2f}'],
-        ['', ''],
-        ['═══════════════', '═══════════════'],
-        ['CAJA REAL', f'$ {caja_real:,.2f}'],
-    ]
-    
-    tabla = Table(datos, colWidths=[3.5*inch, 2*inch])
-    
-    # Estilo de la tabla
-    estilo_tabla = TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1f77b4')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 12),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#d4edda') if abs(caja_real) < 0.01 else colors.HexColor('#f8d7da')),
-        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, -1), (-1, -1), 14),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#f0f0f0')]),
-    ])
-    
-    tabla.setStyle(estilo_tabla)
-    elementos.append(tabla)
-    
-    # Estado de la caja
-    elementos.append(Spacer(1, 0.3*inch))
-    if abs(caja_real) < 0.01:
-        estado = Paragraph("<b style='color: green; font-size: 16px;'>✅ CAJA PERFECTA</b>", styles['Normal'])
-    elif caja_real < 0:
-        estado = Paragraph(f"<b style='color: orange; font-size: 16px;'>⚠️ SOBRAN $ {abs(caja_real):,.2f}</b>", styles['Normal'])
-    else:
-        estado = Paragraph(f"<b style='color: red; font-size: 16px;'>❌ FALTAN $ {caja_real:,.2f}</b>", styles['Normal'])
-    
-    elementos.append(estado)
-    
-    doc.build(elementos)
-    buffer.seek(0)
-    return buffer
-
-# Botón de descarga PDF
-st.subheader("📥 Descargar Cierre")
-if st.button("📄 Generar PDF", type="primary", use_container_width=True):
-    pdf_buffer = generar_pdf()
-    st.download_button(
-        label="💾 Descargar PDF",
-        data=pdf_buffer,
-        file_name=f"cierre_caja_{fecha.strftime('%Y%m%d')}_{nombre_caja.replace(' ', '_')}.pdf",
-        mime="application/pdf",
-        type="primary",
-        use_container_width=True
-    )
-
-# Nota para el día siguiente
-st.markdown("---")
-st.info(f"""
-### 📌 Para mañana ({(fecha + datetime.timedelta(days=1)).strftime('%d/%m/%Y')}):
-- **Cambio de ayer:** ${cambio_manana:,.2f}
-- **Dinero a retirar hoy:** ${dinero_a_retirar:,.2f}
-""")
+with c_res3:
+    st.write("") 
+    if st.button("📄 Crear Reporte PDF", type="primary", use_container_width=True):
+        desglose_digital = {"Mercado Pago": mp, "Nave": nave, "Clover": clover, "BBVA": bbva}
+        pdf_bytes = generar_pdf_profesional(
+            fecha_input, cajero, balanza_total, registradora_total, total_digital, 
+            efectivo_neto, caja_inicial, total_fisico, caja_proxima, retiro,
+            df_salidas, df_errores, df_vales, df_descuentos, 
+            diferencia, desglose_digital
+        )
+        st.download_button("Guardar PDF", data=pdf_bytes, file_name=f"Cierre_{fecha_input}.pdf", mime="application/pdf", use_container_width=True)
