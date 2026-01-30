@@ -6,9 +6,8 @@ import os
 from streamlit_gsheets import GSheetsConnection
 
 # --- 1. CONFIGURACIÓN ---
-st.set_page_config(page_title="Cierre de Caja", layout="centered") # Usamos 'centered' para que parezca una hoja A4
+st.set_page_config(page_title="Cierre de Caja", layout="centered")
 
-# Estilo para limpiar la interfaz al máximo
 hide_st_style = """
             <style>
             #MainMenu {visibility: hidden;}
@@ -19,7 +18,7 @@ hide_st_style = """
             """
 st.markdown(hide_st_style, unsafe_allow_html=True)
 
-# --- CONEXIÓN GOOGLE SHEETS (Si falla, no rompe la app) ---
+# --- CONEXIÓN GOOGLE SHEETS ---
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
 except:
@@ -49,7 +48,7 @@ def guardar_en_sheets(datos):
         st.error(f"Error nube: {e}")
         return False
 
-# --- 4. FUNCIÓN PDF (Diseño V 2.1 Aprobado) ---
+# --- 4. FUNCIÓN PDF ---
 def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital, efectivo_neto, 
                             caja_inicial, total_fisico, caja_proxima, retiro,
                             df_salidas, df_transferencias, df_errores, df_vales, df_descuentos, diferencia, desglose_digital):
@@ -135,9 +134,8 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
     return pdf.output(dest="S").encode("latin-1")
 
 
-# --- 5. INTERFAZ UI "TIPO HOJA" ---
+# --- 5. INTERFAZ UI ---
 
-# Funciones auxiliares para tablas
 def input_tabla(titulo, key, solo_monto=False):
     st.markdown(f"**{titulo}**")
     cfg = {"Monto": st.column_config.NumberColumn("($)", format="$%d", width="medium")}
@@ -145,19 +143,20 @@ def input_tabla(titulo, key, solo_monto=False):
     df = st.data_editor(st.session_state[key], column_config=cfg, num_rows="dynamic", use_container_width=True, key=f"ed_{key}")
     return df, (df["Monto"].sum() if not df.empty else 0.0)
 
-# --- INICIO DEL FORMULARIO ---
+# --- FORMULARIO ---
 st.title("Estancia San Francisco")
 
 # 1. FECHA y CAJA ANTERIOR
 c1, c2 = st.columns(2)
 with c1: fecha_input = st.date_input("Fecha", datetime.today())
 with c2: caja_inicial = st.number_input("Caja (Día Anterior)", 0.0, step=100.0)
-cajero = st.text_input("Nombre Cajero", "Santiago")
+
+# CAMBIO: SELECTOR DE CAJERO
+cajero = st.selectbox("Cajero de Turno", ["Santiago", "Leandro", "Natalia"])
 
 st.markdown("---")
 
 # 2. SOMOS AVELLANEDA
-# Lógica: Solo mostramos si es Lunes(0) o Miércoles(2)
 dia_semana = fecha_input.weekday()
 df_descuentos = pd.DataFrame(columns=["Monto"])
 total_descuentos = 0.0
@@ -180,13 +179,9 @@ st.markdown("---")
 col_core1, col_core2, col_core3 = st.columns(3)
 with col_core1: registradora_total = st.number_input("Registradora (Z)", 0.0, step=100.0)
 with col_core2: balanza_total = st.number_input("Balanza", 0.0, step=100.0)
-with col_core3: 
-    # El efectivo se calcula con la calculadora o se pone manual
-    # Mostramos el total calculado abajo
-    st.markdown("**Efectivo (Físico)**")
+with col_core3: st.markdown("**Efectivo (Físico)**")
 
-# Calculadora de Billetes (Dentro de un expander para no ensuciar)
-with st.expander("🧮 Calculadora de Billetes (Click para abrir)", expanded=True):
+with st.expander("🧮 Calculadora de Billetes", expanded=True):
     cb1, cb2, cb3, cb4 = st.columns(4)
     with cb1: b_20000 = st.number_input("$20k", 0); b_500 = st.number_input("$500", 0)
     with cb2: b_10000 = st.number_input("$10k", 0); b_200 = st.number_input("$200", 0)
@@ -194,13 +189,12 @@ with st.expander("🧮 Calculadora de Billetes (Click para abrir)", expanded=Tru
     with cb4: b_1000 = st.number_input("$1k", 0); monedas = st.number_input("Mon", 0.0)
     total_fisico = (b_20000*20000)+(b_10000*10000)+(b_2000*2000)+(b_1000*1000)+(b_500*500)+(b_200*200)+(b_100*100)+monedas
 
-# Mostramos el total de efectivo bien grande
 st.info(f"💵 Total Efectivo: ${total_fisico:,.2f}")
 efectivo_neto = total_fisico - caja_inicial
 
 st.markdown("---")
 
-# 6. DIGITAL (Mercado Pago, Nave, Clover, BBVA)
+# 6. DIGITAL
 st.markdown("**Cobros Digitales**")
 cd1, cd2, cd3, cd4 = st.columns(4)
 with cd1: mp = st.number_input("Mercado Pago", 0.0, step=100.0)
@@ -222,13 +216,11 @@ df_salidas, total_salidas = input_tabla("Salida de Caja", "df_salidas", solo_mon
 st.caption(f"Total Salidas: ${total_salidas:,.2f}")
 st.markdown("---")
 
-# 9. RESULTADO (CAJA REAL)
-# Destino del dinero (para el PDF)
+# 9. RESULTADO
 col_dest1, col_dest2 = st.columns(2)
 with col_dest1: caja_proxima = st.number_input("Queda para Mañana", 0.0, step=100.0)
-with col_dest2: retiro = total_fisico - caja_proxima # Informativo
+with col_dest2: retiro = total_fisico - caja_proxima
 
-# Cálculos
 total_justificado = total_digital + efectivo_neto + total_transf + total_salidas + total_errores + total_vales + total_descuentos
 diferencia = balanza_total - total_justificado
 
@@ -254,7 +246,6 @@ with col_final2:
         )
         st.download_button("Descargar", data=pdf_bytes, file_name=f"Cierre_{fecha_input}.pdf", mime="application/pdf", use_container_width=True)
     
-    # Botón Nube (Si hay conexión)
     if 'conn' in globals():
         if st.button("☁️ Guardar Nube", use_container_width=True):
             estado_caja = "FALTANTE" if diferencia > 0 else ("SOBRANTE" if diferencia < 0 else "OK")
