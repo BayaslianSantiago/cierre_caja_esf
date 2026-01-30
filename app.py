@@ -5,7 +5,7 @@ from fpdf import FPDF
 import os
 from streamlit_gsheets import GSheetsConnection
 
-# --- 1. CONFIGURACIÓN ---
+# --- 1. CONFIGURACIÓN Y LOGIN ---
 st.set_page_config(page_title="Cierre de Caja", layout="centered")
 
 hide_st_style = """
@@ -18,14 +18,34 @@ hide_st_style = """
             """
 st.markdown(hide_st_style, unsafe_allow_html=True)
 
+# 🔐 SISTEMA DE LOGIN
+def check_password():
+    def password_entered():
+        if st.session_state["password"] == st.secrets["general"]["password"]:
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]
+        else:
+            st.session_state["password_correct"] = False
+
+    if st.session_state.get("password_correct", False):
+        return True
+
+    st.title("🔒 Acceso Restringido")
+    st.text_input("Ingresá la contraseña del local:", type="password", on_change=password_entered, key="password")
+    if "password_correct" in st.session_state and not st.session_state["password_correct"]:
+        st.error("😕 Contraseña incorrecta")
+    return False
+
+if not check_password():
+    st.stop()
+
 # --- CONEXIÓN GOOGLE SHEETS ---
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
 except:
     pass
 
-# --- 2. CARGA DE DATOS MAESTROS (PROVEEDORES) ---
-# Intentamos leer la Hoja "Directorio" para llenar el selectbox
+# --- 2. CARGA DE DATOS MAESTROS ---
 lista_proveedores = ["Pan Rustico", "Pan Fresh", "Dharma", "ValMaira", "Aprea", "CocaCola", "Grenn&Co", "Basile Walter", "Otro"]
 df_directorio = pd.DataFrame()
 
@@ -46,7 +66,7 @@ if 'df_errores' not in st.session_state: st.session_state.df_errores = pd.DataFr
 if 'df_descuentos' not in st.session_state: st.session_state.df_descuentos = pd.DataFrame(columns=["Monto"])
 if 'df_proveedores' not in st.session_state: st.session_state.df_proveedores = pd.DataFrame(columns=["Proveedor", "Forma Pago", "Nro Factura", "Monto"])
 
-# Limpiezas de seguridad
+# Limpiezas
 if 'Descripción' in st.session_state.df_transferencias.columns: st.session_state.df_transferencias = pd.DataFrame(columns=["Monto"])
 if 'Descripción' in st.session_state.df_errores.columns: st.session_state.df_errores = pd.DataFrame(columns=["Monto"])
 if 'Descripción' in st.session_state.df_descuentos.columns: st.session_state.df_descuentos = pd.DataFrame(columns=["Monto"])
@@ -54,26 +74,22 @@ if 'Descripción' in st.session_state.df_descuentos.columns: st.session_state.df
 # --- 4. FUNCIÓN DE GUARDADO ---
 def guardar_todo_en_nube(datos_cierre, df_provs):
     try:
-        # A. GUARDAR EL CIERRE (HOJA: Historial)
+        # A. Historial
         df_historial = conn.read(worksheet="Historial")
         fila_cierre = pd.DataFrame([datos_cierre])
         df_historial_upd = pd.concat([df_historial, fila_cierre], ignore_index=True).fillna("")
         conn.update(worksheet="Historial", data=df_historial_upd)
         
-        # B. GUARDAR PROVEEDORES (HOJA: Pagos_Proveedores)
+        # B. Proveedores
         pagos_reales = df_provs[df_provs["Monto"] > 0].copy()
         if not pagos_reales.empty:
-            # Agregamos fecha y cajero a cada fila
             pagos_reales["Fecha"] = datos_cierre["Fecha"]
             pagos_reales["Cajero"] = datos_cierre["Cajero"]
-            
-            # Ordenamos columnas
             pagos_reales = pagos_reales[["Fecha", "Proveedor", "Forma Pago", "Nro Factura", "Monto", "Cajero"]]
             
             df_pagos_ant = conn.read(worksheet="Pagos_Proveedores")
             df_pagos_upd = pd.concat([df_pagos_ant, pagos_reales], ignore_index=True).fillna("")
             conn.update(worksheet="Pagos_Proveedores", data=df_pagos_upd)
-            
         return True
     except Exception as e:
         st.error(f"Error guardando en nube: {e}")
@@ -91,25 +107,20 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
         try: pdf.image("logo.png", 15, 10, 30)
         except: pass 
 
-    # Fecha en Español
     dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
     nombre_dia = dias_semana[fecha.weekday()] 
     fecha_texto = f"{nombre_dia} {fecha.strftime('%d/%m/%Y')}"
 
-    # Encabezado
     pdf.set_xy(50, 12); pdf.set_font("Arial", 'B', 18); pdf.cell(0, 10, "ESTANCIA SAN FRANCISCO", ln=1)
     pdf.set_xy(50, 20); pdf.set_font("Arial", '', 12); pdf.cell(0, 8, "Reporte de Cierre de Caja", ln=1)
     pdf.set_xy(130, 12); pdf.set_font("Arial", 'B', 10); pdf.cell(60, 6, f"FECHA: {fecha_texto}", ln=1, align='R')
     pdf.set_x(130); pdf.cell(60, 6, f"CAJERO: {cajero}", ln=1, align='R')
-    
     pdf.ln(15); pdf.line(15, pdf.get_y(), 195, pdf.get_y()); pdf.ln(3)
 
-    # Caja Inicial
     pdf.set_font("Arial", 'B', 12)
     pdf.cell(0, 10, f"CAJA INICIAL (Apertura): $ {caja_inicial:,.2f}", ln=1, align='L')
     pdf.ln(3)
 
-    # KPIs Principales
     def dibujar_kpi(titulo, monto):
         pdf.set_fill_color(240, 240, 240); pdf.set_font("Arial", 'B', 12)
         pdf.cell(0, 10, f"{titulo}: $ {monto:,.2f}", ln=1, align='C', fill=True, border=1)
@@ -123,7 +134,6 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
     pdf.cell(0, 6, f"Ticket Fiscal (Z): $ {registradora:,.2f}", border=0, align='C', ln=1)
     pdf.ln(5)
 
-    # Detalles
     pdf.set_font("Arial", 'B', 11); pdf.cell(0, 8, "DETALLE DIGITAL", ln=1); pdf.set_font("Arial", '', 9)
     for k, v in desglose_digital.items():
         if v > 0: pdf.cell(130, 5, f" - {k}"); pdf.cell(40, 5, f"$ {v:,.2f}", align='R', ln=1)
@@ -139,7 +149,6 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
 
     pdf.ln(5); pdf.set_font("Arial", 'B', 11); pdf.cell(0, 8, "C. AJUSTES Y PROVEEDORES", ln=1)
 
-    # Funciones de Tablas
     def dibujar_tabla(titulo, df, estilo="lista", label_fijo=None):
         if df.empty or df['Monto'].sum() == 0: return
         pdf.set_font("Arial", 'B', 10); pdf.set_fill_color(240, 240, 240)
@@ -177,7 +186,6 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
     dibujar_tabla("ERRORES DE BALANZA", df_errores, estilo='fijo', label_fijo="Error de Facturación")
     dibujar_tabla("DESCUENTOS AVELLANEDA", df_descuentos, estilo='grilla')
 
-    # Resultado Final
     y_start_box = pdf.get_y()
     if y_start_box > 250: pdf.add_page(); y_start_box = 20
     estado, color_texto = ("FALTANTE", (200, 0, 0)) if diferencia > 0 else ("SOBRANTE", (0, 100, 0))
@@ -189,7 +197,6 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
 
 
 # --- 5. INTERFAZ UI ---
-
 def input_tabla(titulo, key, solo_monto=False):
     st.markdown(f"**{titulo}**")
     cfg = {"Monto": st.column_config.NumberColumn("($)", format="$%d", width="medium")}
@@ -204,7 +211,6 @@ st.title("Estancia San Francisco")
 c1, c2 = st.columns(2)
 with c1: fecha_input = st.date_input("Fecha", datetime.today())
 with c2: caja_inicial = st.number_input("Caja (Día Anterior)", 0.0, step=100.0)
-
 cajero = st.selectbox("Cajero de Turno", ["Santiago", "Leandro", "Natalia"])
 st.markdown("---")
 
@@ -265,17 +271,17 @@ st.markdown("---")
 st.markdown("**Pago a Proveedores**")
 columnas_proveedores = {
     "Proveedor": st.column_config.SelectboxColumn("Proveedor", options=lista_proveedores, required=True, width="medium"),
-    "Forma Pago": st.column_config.SelectboxColumn("Método", options=["Efectivo", "Transferencia"], required=True, width="small"),
-    "Nro Factura": st.column_config.TextColumn("Nro Factura (Si es Transf)", width="medium"),
+    "Forma Pago": st.column_config.SelectboxColumn("Método", options=["Efectivo", "Digital / Banco"], required=True, width="small"),
+    "Nro Factura": st.column_config.TextColumn("Nro Factura", width="medium"),
     "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0)
 }
 df_proveedores = st.data_editor(st.session_state.df_proveedores, column_config=columnas_proveedores, num_rows="dynamic", use_container_width=True, key="ed_proveedores")
 
 total_prov_efectivo = df_proveedores[df_proveedores["Forma Pago"] == "Efectivo"]["Monto"].sum()
-total_prov_transf = df_proveedores[df_proveedores["Forma Pago"] == "Transferencia"]["Monto"].sum()
+total_prov_digital = df_proveedores[df_proveedores["Forma Pago"] == "Digital / Banco"]["Monto"].sum()
 
 if total_prov_efectivo > 0: st.warning(f"📉 Se descontarán ${total_prov_efectivo:,.2f} de la CAJA (Pagos en Efectivo).")
-if total_prov_transf > 0: st.info(f"ℹ️ Pagos por Transferencia: ${total_prov_transf:,.2f} (No afectan caja).")
+if total_prov_digital > 0: st.info(f"ℹ️ Pagos Digitales/Banco: ${total_prov_digital:,.2f} (No afectan caja).")
 st.markdown("---")
 
 # 9. SALIDA DE CAJA (GASTOS VARIOS)
@@ -318,25 +324,13 @@ with col_final2:
     if 'conn' in globals():
         if st.button("☁️ Guardar Nube", use_container_width=True):
             estado_caja = "FALTANTE" if diferencia > 0 else ("SOBRANTE" if diferencia < 0 else "OK")
-            # En Salidas sumamos todo lo que afectó efectivo (Varios + Prov Efectivo)
             total_salidas_reporte = total_salidas + total_prov_efectivo
-            
-            # DATOS CON NOMBRES CORTOS
             datos_cierre = {
-                "Fecha": fecha_input.strftime("%d/%m/%Y"),
-                "Cajero": cajero,
-                "Balanza": balanza_total,
-                "Digital": total_digital,
-                "Efectivo": efectivo_neto,
-                "Transferencias": total_transf_in,
-                "Salidas": total_salidas_reporte,
-                "Vales": total_vales,
-                "Errores": total_errores,
-                "Descuentos": total_descuentos,
-                "Diferencia": diferencia,
-                "Estado": estado_caja
+                "Fecha": fecha_input.strftime("%d/%m/%Y"), "Cajero": cajero,
+                "Balanza": balanza_total, "Digital": total_digital, "Efectivo": efectivo_neto,
+                "Transferencias": total_transf_in, "Salidas": total_salidas_reporte, "Vales": total_vales,
+                "Errores": total_errores, "Descuentos": total_descuentos, "Diferencia": diferencia, "Estado": estado_caja
             }
-            
             with st.spinner("Guardando..."):
                 if guardar_todo_en_nube(datos_cierre, df_proveedores):
                     st.success("✅ Guardado Correctamente")
