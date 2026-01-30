@@ -60,10 +60,18 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
         try: pdf.image("logo.png", 15, 10, 30)
         except: pass 
 
+    # --- LÓGICA DE FECHA EN ESPAÑOL ---
+    dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+    nombre_dia = dias_semana[fecha.weekday()] # Obtiene el nombre (ej: "Viernes")
+    fecha_texto = f"{nombre_dia} {fecha.strftime('%d/%m/%Y')}"
+
+    # ENCABEZADO
     pdf.set_xy(50, 12); pdf.set_font("Arial", 'B', 18); pdf.cell(0, 10, "ESTANCIA SAN FRANCISCO", ln=1)
     pdf.set_xy(50, 20); pdf.set_font("Arial", '', 12); pdf.cell(0, 8, "Reporte de Cierre de Caja", ln=1)
-    pdf.set_xy(140, 12); pdf.set_font("Arial", 'B', 10); pdf.cell(50, 6, f"FECHA: {fecha.strftime('%d/%m/%Y')}", ln=1, align='R')
-    pdf.set_x(140); pdf.cell(50, 6, f"CAJERO: {cajero}", ln=1, align='R')
+    
+    # Aquí usamos la nueva variable fecha_texto
+    pdf.set_xy(130, 12); pdf.set_font("Arial", 'B', 10); pdf.cell(60, 6, f"FECHA: {fecha_texto}", ln=1, align='R')
+    pdf.set_x(130); pdf.cell(60, 6, f"CAJERO: {cajero}", ln=1, align='R')
     
     pdf.ln(15); pdf.line(15, pdf.get_y(), 195, pdf.get_y()); pdf.ln(3)
 
@@ -151,7 +159,7 @@ c1, c2 = st.columns(2)
 with c1: fecha_input = st.date_input("Fecha", datetime.today())
 with c2: caja_inicial = st.number_input("Caja (Día Anterior)", 0.0, step=100.0)
 
-# CAMBIO: SELECTOR DE CAJERO
+# SELECTOR DE CAJERO
 cajero = st.selectbox("Cajero de Turno", ["Santiago", "Leandro", "Natalia"])
 
 st.markdown("---")
