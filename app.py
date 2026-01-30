@@ -31,6 +31,10 @@ if 'df_vales' not in st.session_state: st.session_state.df_vales = pd.DataFrame(
 if 'df_errores' not in st.session_state: st.session_state.df_errores = pd.DataFrame(columns=["Monto"])
 if 'df_descuentos' not in st.session_state: st.session_state.df_descuentos = pd.DataFrame(columns=["Monto"])
 
+# NUEVA TABLA: PROVEEDORES
+if 'df_proveedores' not in st.session_state: 
+    st.session_state.df_proveedores = pd.DataFrame(columns=["Proveedor", "Forma Pago", "Nro Factura", "Monto"])
+
 # Limpiezas de seguridad
 if 'Descripción' in st.session_state.df_transferencias.columns: st.session_state.df_transferencias = pd.DataFrame(columns=["Monto"])
 if 'Descripción' in st.session_state.df_errores.columns: st.session_state.df_errores = pd.DataFrame(columns=["Monto"])
@@ -51,7 +55,7 @@ def guardar_en_sheets(datos):
 # --- 4. FUNCIÓN PDF ---
 def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital, efectivo_neto, 
                             caja_inicial, total_fisico, caja_proxima, retiro,
-                            df_salidas, df_transferencias, df_errores, df_vales, df_descuentos, diferencia, desglose_digital):
+                            df_salidas, df_transferencias, df_errores, df_vales, df_descuentos, df_proveedores, diferencia, desglose_digital):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_margins(15, 15, 15)
@@ -60,16 +64,15 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
         try: pdf.image("logo.png", 15, 10, 30)
         except: pass 
 
-    # --- LÓGICA DE FECHA EN ESPAÑOL ---
+    # FECHA EN ESPAÑOL
     dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
-    nombre_dia = dias_semana[fecha.weekday()] # Obtiene el nombre (ej: "Viernes")
+    nombre_dia = dias_semana[fecha.weekday()] 
     fecha_texto = f"{nombre_dia} {fecha.strftime('%d/%m/%Y')}"
 
     # ENCABEZADO
     pdf.set_xy(50, 12); pdf.set_font("Arial", 'B', 18); pdf.cell(0, 10, "ESTANCIA SAN FRANCISCO", ln=1)
     pdf.set_xy(50, 20); pdf.set_font("Arial", '', 12); pdf.cell(0, 8, "Reporte de Cierre de Caja", ln=1)
     
-    # Aquí usamos la nueva variable fecha_texto
     pdf.set_xy(130, 12); pdf.set_font("Arial", 'B', 10); pdf.cell(60, 6, f"FECHA: {fecha_texto}", ln=1, align='R')
     pdf.set_x(130); pdf.cell(60, 6, f"CAJERO: {cajero}", ln=1, align='R')
     
@@ -106,8 +109,9 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
     pdf.cell(130, 5, "   -> Queda (Caja Mañana):"); pdf.cell(40, 5, f"$ {caja_proxima:,.2f}", align='R', ln=1)
     pdf.cell(130, 5, "   -> Se Retira:"); pdf.cell(40, 5, f"$ {retiro:,.2f}", align='R', ln=1)
 
-    pdf.ln(5); pdf.set_font("Arial", 'B', 11); pdf.cell(0, 8, "C. AJUSTES, TRANSFERENCIAS Y OTROS", ln=1)
+    pdf.ln(5); pdf.set_font("Arial", 'B', 11); pdf.cell(0, 8, "C. AJUSTES Y PROVEEDORES", ln=1)
 
+    # FUNCIÓN TABLA GENÉRICA
     def dibujar_tabla(titulo, df, estilo="lista", label_fijo=None):
         if df.empty or df['Monto'].sum() == 0: return
         pdf.set_font("Arial", 'B', 10); pdf.set_fill_color(240, 240, 240)
@@ -126,8 +130,29 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
                     pdf.cell(130, 5, f"      - {txt}"); pdf.cell(40, 5, f"$ {row['Monto']:,.2f}", align='R', ln=1)
         pdf.ln(2)
 
-    dibujar_tabla("TRANSFERENCIAS", df_transferencias, estilo='fijo', label_fijo="Transferencia")
-    dibujar_tabla("GASTOS / SALIDAS", df_salidas, estilo='lista')
+    # FUNCIÓN ESPECIAL PARA PROVEEDORES (Muestra Factura y Método)
+    def dibujar_tabla_proveedores(df):
+        if df.empty or df['Monto'].sum() == 0: return
+        pdf.set_font("Arial", 'B', 10); pdf.set_fill_color(240, 240, 240)
+        pdf.cell(180, 6, f"  PAGO A PROVEEDORES (Total: $ {df['Monto'].sum():,.2f})", ln=1, fill=True); pdf.set_font("Arial", '', 8)
+        
+        # Cabecera simple
+        pdf.cell(50, 5, "PROVEEDOR", 1); pdf.cell(30, 5, "METODO", 1); pdf.cell(40, 5, "FACTURA", 1); pdf.cell(30, 5, "MONTO", 1, ln=1)
+        
+        for _, row in df.iterrows():
+            if row['Monto'] > 0:
+                prov = str(row['Proveedor'])
+                met = str(row['Forma Pago'])
+                fac = str(row['Nro Factura']) if row['Nro Factura'] else "-"
+                pdf.cell(50, 5, prov, 1)
+                pdf.cell(30, 5, met, 1)
+                pdf.cell(40, 5, fac, 1)
+                pdf.cell(30, 5, f"$ {row['Monto']:,.2f}", 1, ln=1)
+        pdf.ln(2)
+
+    dibujar_tabla_proveedores(df_proveedores) # NUEVA TABLA
+    dibujar_tabla("TRANSFERENCIAS (Entrantes)", df_transferencias, estilo='fijo', label_fijo="Transferencia")
+    dibujar_tabla("GASTOS VARIOS / SALIDAS", df_salidas, estilo='lista')
     dibujar_tabla("VALES / FIADOS", df_vales, estilo='lista')
     dibujar_tabla("ERRORES DE BALANZA", df_errores, estilo='fijo', label_fijo="Error de Facturación")
     dibujar_tabla("DESCUENTOS AVELLANEDA", df_descuentos, estilo='grilla')
@@ -159,7 +184,6 @@ c1, c2 = st.columns(2)
 with c1: fecha_input = st.date_input("Fecha", datetime.today())
 with c2: caja_inicial = st.number_input("Caja (Día Anterior)", 0.0, step=100.0)
 
-# SELECTOR DE CAJERO
 cajero = st.selectbox("Cajero de Turno", ["Santiago", "Leandro", "Natalia"])
 
 st.markdown("---")
@@ -178,9 +202,9 @@ df_vales, total_vales = input_tabla("Vales", "df_vales", solo_monto=False)
 st.caption(f"Total Vales: ${total_vales:,.2f}")
 st.markdown("---")
 
-# 4. TRANSFERENCIAS
-df_transferencias, total_transf = input_tabla("Transferencias", "df_transferencias", solo_monto=True)
-st.caption(f"Total Transferencias: ${total_transf:,.2f}")
+# 4. TRANSFERENCIAS (ENTRANTES)
+df_transferencias, total_transf_in = input_tabla("Transferencias (Entrantes / Clientes)", "df_transferencias", solo_monto=True)
+st.caption(f"Total Transferencias: ${total_transf_in:,.2f}")
 st.markdown("---")
 
 # 5. REGISTRADORA | BALANZA | EFECTIVO
@@ -219,17 +243,52 @@ df_errores, total_errores = input_tabla("Errores", "df_errores", solo_monto=True
 st.caption(f"Total Errores: ${total_errores:,.2f}")
 st.markdown("---")
 
-# 8. SALIDA DE CAJA
-df_salidas, total_salidas = input_tabla("Salida de Caja", "df_salidas", solo_monto=False)
-st.caption(f"Total Salidas: ${total_salidas:,.2f}")
+# 8. PAGO A PROVEEDORES (NUEVO)
+st.markdown("**Pago a Proveedores**")
+lista_proveedores = ["Pan Rustico", "Pan Fresh", "Dharma", "ValMaira", "Aprea", "CocaCola", "Grenn&Co", "Basile Walter", "Otro"]
+
+columnas_proveedores = {
+    "Proveedor": st.column_config.SelectboxColumn("Proveedor", options=lista_proveedores, required=True, width="medium"),
+    "Forma Pago": st.column_config.SelectboxColumn("Método", options=["Efectivo", "Transferencia"], required=True, width="small"),
+    "Nro Factura": st.column_config.TextColumn("Nro Factura (Si es Transf)", width="medium"),
+    "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0)
+}
+
+df_proveedores = st.data_editor(
+    st.session_state.df_proveedores,
+    column_config=columnas_proveedores,
+    num_rows="dynamic",
+    use_container_width=True,
+    key="ed_proveedores"
+)
+
+# LÓGICA DEL RETO: Separar Efectivo de Transferencia
+total_prov_efectivo = df_proveedores[df_proveedores["Forma Pago"] == "Efectivo"]["Monto"].sum()
+total_prov_transf = df_proveedores[df_proveedores["Forma Pago"] == "Transferencia"]["Monto"].sum()
+
+if total_prov_efectivo > 0:
+    st.warning(f"📉 Se descontarán ${total_prov_efectivo:,.2f} de la CAJA (Pagos en Efectivo).")
+if total_prov_transf > 0:
+    st.info(f"ℹ️ Pagos por Transferencia: ${total_prov_transf:,.2f} (No afectan caja).")
+
 st.markdown("---")
 
-# 9. RESULTADO
+# 9. SALIDA DE CAJA (GASTOS VARIOS)
+df_salidas, total_salidas = input_tabla("Salida de Caja (Gastos Varios Local)", "df_salidas", solo_monto=False)
+st.caption(f"Total Salidas Varios: ${total_salidas:,.2f}")
+st.markdown("---")
+
+# 10. RESULTADO
 col_dest1, col_dest2 = st.columns(2)
 with col_dest1: caja_proxima = st.number_input("Queda para Mañana", 0.0, step=100.0)
 with col_dest2: retiro = total_fisico - caja_proxima
 
-total_justificado = total_digital + efectivo_neto + total_transf + total_salidas + total_errores + total_vales + total_descuentos
+# CÁLCULOS FINALES
+# A los gastos (total_salidas) le sumamos los Proveedores que se pagaron en EFECTIVO.
+# Las transferencias a proveedores se ignoran para el arqueo.
+total_gastos_fisicos = total_salidas + total_prov_efectivo
+
+total_justificado = total_digital + efectivo_neto + total_transf_in + total_gastos_fisicos + total_errores + total_vales + total_descuentos
 diferencia = balanza_total - total_justificado
 
 st.markdown("### Resultado")
@@ -249,7 +308,7 @@ with col_final2:
         pdf_bytes = generar_pdf_profesional(
             fecha_input, cajero, balanza_total, registradora_total, total_digital, 
             efectivo_neto, caja_inicial, total_fisico, caja_proxima, retiro,
-            df_salidas, df_transferencias, df_errores, df_vales, df_descuentos, 
+            df_salidas, df_transferencias, df_errores, df_vales, df_descuentos, df_proveedores,
             diferencia, desglose_digital
         )
         st.download_button("Descargar", data=pdf_bytes, file_name=f"Cierre_{fecha_input}.pdf", mime="application/pdf", use_container_width=True)
@@ -257,10 +316,13 @@ with col_final2:
     if 'conn' in globals():
         if st.button("☁️ Guardar Nube", use_container_width=True):
             estado_caja = "FALTANTE" if diferencia > 0 else ("SOBRANTE" if diferencia < 0 else "OK")
+            # En Salidas sumamos todo lo que salió de la caja (Gastos Varios + Proveedores Efectivo)
+            total_salidas_reporte = total_salidas + total_prov_efectivo
+            
             datos = {
                 "Fecha": fecha_input.strftime("%d/%m/%Y"), "Cajero": cajero,
                 "Balanza": balanza_total, "Digital": total_digital, "Efectivo": efectivo_neto,
-                "Transferencias": total_transf, "Salidas": total_salidas, "Vales": total_vales,
+                "Transferencias": total_transf_in, "Salidas": total_salidas_reporte, "Vales": total_vales,
                 "Errores": total_errores, "Diferencia": diferencia, "Estado": estado_caja
             }
             if guardar_en_sheets(datos): st.success("Guardado!"); st.balloons()
