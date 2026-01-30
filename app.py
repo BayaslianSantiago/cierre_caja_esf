@@ -4,7 +4,7 @@ from datetime import datetime
 from fpdf import FPDF
 import os
 
-# --- 1. CONFIGURACIÓN MINIMALISTA ---
+# --- 1. CONFIGURACIÓN ---
 st.set_page_config(page_title="Cierre de Caja", layout="wide")
 
 hide_st_style = """
@@ -16,19 +16,21 @@ hide_st_style = """
             """
 st.markdown(hide_st_style, unsafe_allow_html=True)
 
-# --- 2. INICIALIZACIÓN DE VARIABLES ---
-# Inicializamos las tablas. Agregamos TRANSFERENCIAS.
+# --- 2. VARIABLES Y LIMPIEZA ---
+# Inicialización
 if 'df_salidas' not in st.session_state: st.session_state.df_salidas = pd.DataFrame(columns=["Descripción", "Monto"])
-if 'df_transferencias' not in st.session_state: st.session_state.df_transferencias = pd.DataFrame(columns=["Descripción", "Monto"])
+if 'df_transferencias' not in st.session_state: st.session_state.df_transferencias = pd.DataFrame(columns=["Monto"]) # Solo monto ahora
 if 'df_vales' not in st.session_state: st.session_state.df_vales = pd.DataFrame(columns=["Descripción", "Monto"])
 if 'df_errores' not in st.session_state: st.session_state.df_errores = pd.DataFrame(columns=["Monto"])
 if 'df_descuentos' not in st.session_state: st.session_state.df_descuentos = pd.DataFrame(columns=["Monto"])
 
-# Limpieza de columnas viejas por seguridad
+# Limpieza de columnas viejas (SEGURIDAD)
+# Si Transferencias tenía descripción antes, la borramos para que no choque con la nueva estructura
+if 'Descripción' in st.session_state.df_transferencias.columns: st.session_state.df_transferencias = pd.DataFrame(columns=["Monto"])
 if 'Descripción' in st.session_state.df_errores.columns: st.session_state.df_errores = pd.DataFrame(columns=["Monto"])
 if 'Descripción' in st.session_state.df_descuentos.columns: st.session_state.df_descuentos = pd.DataFrame(columns=["Monto"])
 
-# --- 3. FUNCIÓN GENERADORA DE PDF ---
+# --- 3. FUNCIÓN PDF ---
 def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital, efectivo_neto, 
                             caja_inicial, total_fisico, caja_proxima, retiro,
                             df_salidas, df_transferencias, df_errores, df_vales, df_descuentos, diferencia, desglose_digital):
@@ -36,11 +38,12 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
     pdf.add_page()
     pdf.set_margins(15, 15, 15)
     
-    # -- ENCABEZADO --
+    # LOGO
     if os.path.exists("logo.png"):
         try: pdf.image("logo.png", 15, 10, 30)
         except: pass 
 
+    # TÍTULOS
     pdf.set_xy(50, 12)
     pdf.set_font("Arial", 'B', 18)
     pdf.cell(0, 10, "ESTANCIA SAN FRANCISCO", ln=1)
@@ -58,71 +61,63 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
     pdf.line(15, pdf.get_y(), 195, pdf.get_y())
     pdf.ln(3)
 
-    # -- CAJA INICIAL (UBICACIÓN SOLICITADA: ARRIBA) --
+    # CAJA INICIAL
     pdf.set_font("Arial", 'B', 12)
     pdf.cell(0, 10, f"CAJA INICIAL (Apertura): $ {caja_inicial:,.2f}", ln=1, align='L')
     pdf.ln(3)
 
-    # -- BLOQUE DE KPIs (PRINCIPALES) --
-    # El dueño pidió ver Balanza, Efectivo y Digital bien grandes al principio.
-    
+    # BLOQUE KPIs (ETIQUETAS CORREGIDAS)
     def dibujar_kpi(titulo, monto):
-        pdf.set_fill_color(240, 240, 240) # Gris claro
+        pdf.set_fill_color(240, 240, 240)
         pdf.set_font("Arial", 'B', 12)
         pdf.cell(0, 10, f"{titulo}: $ {monto:,.2f}", ln=1, align='C', fill=True, border=1)
-        pdf.ln(2) # Pequeño espacio entre cajas
+        pdf.ln(2) 
 
-    dibujar_kpi("1. TOTAL BALANZA (Objetivo)", balanza)
-    dibujar_kpi("2. EFECTIVO NETO (Ventas)", efectivo_neto)
-    dibujar_kpi("3. TOTAL DIGITAL", total_digital)
+    dibujar_kpi("1. BALANZA", balanza)     # Corrección solicitada
+    dibujar_kpi("2. EFECTIVO", efectivo_neto) # Corrección solicitada
+    dibujar_kpi("3. DIGITAL", total_digital)
     
-    # Resumen pequeño del Z y Transferencias
+    # Z (Informativo)
     pdf.ln(2)
     pdf.set_font("Arial", '', 10)
-    total_transf = df_transferencias['Monto'].sum() if not df_transferencias.empty else 0.0
-    pdf.cell(90, 6, f"Total Transferencias: $ {total_transf:,.2f}", border=1)
-    pdf.cell(90, 6, f"Ticket Fiscal (Z): $ {registradora:,.2f}", border=1, ln=1)
+    pdf.cell(0, 6, f"Ticket Fiscal (Z): $ {registradora:,.2f}", border=0, align='C', ln=1)
     pdf.ln(5)
 
-    # -- DETALLE / DESGLOSE --
-    
-    # A. DIGITAL DETALLE
+    # DETALLES (A y B)
+    # A. Digital
     pdf.set_font("Arial", 'B', 11); pdf.cell(0, 8, "DETALLE DIGITAL", ln=1)
     pdf.set_font("Arial", '', 9)
     for k, v in desglose_digital.items():
         if v > 0:
             pdf.cell(130, 5, f" - {k}"); pdf.cell(40, 5, f"$ {v:,.2f}", align='R', ln=1)
     
-    # B. EFECTIVO DETALLE
+    # B. Efectivo
     pdf.ln(3)
     pdf.set_font("Arial", 'B', 11); pdf.cell(0, 8, "DETALLE EFECTIVO", ln=1)
     pdf.set_font("Arial", '', 9)
     pdf.cell(130, 5, " - Recuento Total Cajón"); pdf.cell(40, 5, f"$ {total_fisico:,.2f}", align='R', ln=1)
     pdf.cell(130, 5, " - (Menos) Caja Inicial"); pdf.cell(40, 5, f"-$ {caja_inicial:,.2f}", align='R', ln=1)
     
-    # Destino
     pdf.ln(2)
     pdf.set_font("Arial", 'B', 9)
     pdf.cell(130, 5, "DESTINO:"); pdf.set_font("Arial", '', 9)
-    pdf.cell(40, 5, "", ln=1) # Salto linea
+    pdf.cell(40, 5, "", ln=1)
     pdf.cell(130, 5, "   -> Queda (Caja Mañana):"); pdf.cell(40, 5, f"$ {caja_proxima:,.2f}", align='R', ln=1)
     pdf.cell(130, 5, "   -> Se Retira:"); pdf.cell(40, 5, f"$ {retiro:,.2f}", align='R', ln=1)
 
-    # C. LISTAS Y AJUSTES
+    # C. LISTAS
     pdf.ln(5)
-    pdf.set_font("Arial", 'B', 11); pdf.cell(0, 8, "AJUSTES, GASTOS Y OTROS", ln=1)
+    pdf.set_font("Arial", 'B', 11); pdf.cell(0, 8, "C. AJUSTES, TRANSFERENCIAS Y OTROS", ln=1)
 
     def dibujar_tabla(titulo, df, estilo="lista", label_fijo=None):
         if df.empty or df['Monto'].sum() == 0: return
         
         pdf.set_font("Arial", 'B', 10)
-        # Título gris
         pdf.set_fill_color(240, 240, 240)
         pdf.cell(180, 6, f"  {titulo} (Total: $ {df['Monto'].sum():,.2f})", ln=1, fill=True)
         pdf.set_font("Arial", '', 9)
         
         if estilo == 'grilla':
-            # MODO GRILLA COMPACTA (Descuentos)
             col_count = 0; ancho_col = 45 
             for _, row in df.iterrows():
                 if row['Monto'] > 0:
@@ -131,15 +126,15 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
                     if col_count % 4 == 0: pdf.ln()
             if col_count % 4 != 0: pdf.ln()     
         else:
-            # MODO LISTA (Gastos, Vales, Transferencias)
             for _, row in df.iterrows():
                 if row['Monto'] > 0:
+                    # Si es lista con descripción, usa la col Descripción. Si es fijo, usa label_fijo
                     txt = str(row['Descripción']) if estilo == 'lista' else label_fijo
                     pdf.cell(130, 5, f"      - {txt}"); pdf.cell(40, 5, f"$ {row['Monto']:,.2f}", align='R', ln=1)
         pdf.ln(2)
 
-    # Dibujamos las tablas
-    dibujar_tabla("TRANSFERENCIAS (Clientes)", df_transferencias, estilo='lista')
+    # Transferencias ahora usa estilo FIJO (Sin detalle, solo label)
+    dibujar_tabla("TRANSFERENCIAS", df_transferencias, estilo='fijo', label_fijo="Transferencia")
     dibujar_tabla("GASTOS / SALIDAS", df_salidas, estilo='lista')
     dibujar_tabla("VALES / FIADOS", df_vales, estilo='lista')
     dibujar_tabla("ERRORES DE BALANZA", df_errores, estilo='fijo', label_fijo="Error de Facturación")
@@ -147,12 +142,8 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
 
     pdf.ln(5)
 
-    # -- CAJA REAL (RESULTADO FINAL) --
-    # El dueño pidió que esto vaya AL FINAL, antes de observaciones
-    
+    # CAJA REAL (FONDO)
     y_start_box = pdf.get_y()
-    
-    # Verificamos si entra en la hoja, sino agregamos página para que el resultado no quede cortado
     if y_start_box > 250:
         pdf.add_page()
         y_start_box = 20
@@ -176,7 +167,6 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
 st.markdown("## Cierre de Caja")
 st.markdown("Estancia San Francisco")
 
-# CABECERA
 c_head1, c_head2, c_head3 = st.columns([1, 1, 2])
 with c_head1: fecha_input = st.date_input("Fecha", datetime.today())
 with c_head2: cajero = st.text_input("Cajero", "Santiago")
@@ -184,7 +174,6 @@ with c_head3: pass
 
 st.markdown("---")
 
-# LAYOUT PRINCIPAL
 col_izq, col_der = st.columns(2, gap="large")
 
 with col_izq:
@@ -197,12 +186,8 @@ with col_izq:
     st.caption("Posnets")
     with st.container(border=True):
         c_pos1, c_pos2 = st.columns(2)
-        with c_pos1:
-            mp = st.number_input("Mercado Pago", 0.0, step=100.0)
-            nave = st.number_input("Nave", 0.0, step=100.0)
-        with c_pos2:
-            clover = st.number_input("Clover", 0.0, step=100.0)
-            bbva = st.number_input("BBVA", 0.0, step=100.0)
+        with c_pos1: mp = st.number_input("Mercado Pago", 0.0, step=100.0); nave = st.number_input("Nave", 0.0, step=100.0)
+        with c_pos2: clover = st.number_input("Clover", 0.0, step=100.0); bbva = st.number_input("BBVA", 0.0, step=100.0)
     
     total_digital = mp + nave + clover + bbva
     if total_digital > 0: st.info(f"Digital: ${total_digital:,.2f}")
@@ -231,12 +216,10 @@ with col_der:
         with c_dest1: caja_proxima = st.number_input("Queda Mañana", 0.0, step=100.0)
         with c_dest2: st.metric("Se Retira", f"${total_fisico - caja_proxima:,.2f}")
 
-# SECCIÓN INFERIOR
 st.markdown("---")
 st.subheader("3. Ajustes y Transferencias")
 
 col_aj1, col_aj2 = st.columns(2)
-
 def tabla_min(titulo, key, solo_monto=False):
     cfg = {"Monto": st.column_config.NumberColumn("($)", format="$%d")}
     if not solo_monto: cfg["Descripción"] = st.column_config.TextColumn("Detalle", required=True)
@@ -245,8 +228,8 @@ def tabla_min(titulo, key, solo_monto=False):
     return df, (df["Monto"].sum() if not df.empty else 0.0)
 
 with col_aj1:
-    # Agregamos Transferencias aquí
-    df_transferencias, total_transf = tabla_min("Transferencias (Clientes)", "df_transferencias", False)
+    # Transferencias ahora es solo monto (True)
+    df_transferencias, total_transf = tabla_min("Transferencias", "df_transferencias", True)
     df_salidas, total_salidas = tabla_min("Gastos / Salidas", "df_salidas", False)
 
 with col_aj2:
@@ -260,12 +243,10 @@ with col_aj2:
         df_descuentos, total_descuentos = tabla_min("Somos Avellaneda", "df_descuentos", True)
 
 # CÁLCULOS
-# OJO: Transferencias SUMAN al dinero justificado (es como Digital o Efectivo)
 total_justificado = total_digital + efectivo_neto + total_transf + total_salidas + total_errores + total_vales + total_descuentos
 diferencia = balanza_total - total_justificado
 retiro = total_fisico - caja_proxima
 
-# BARRA RESULTADO
 st.markdown("---")
 c_res1, c_res2, c_res3 = st.columns([1, 2, 1])
 
