@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime
 from fpdf import FPDF
 import os
+import json
 from streamlit_gsheets import GSheetsConnection
 
 # --- 1. CONFIGURACIÓN Y LOGIN ---
@@ -18,7 +19,7 @@ hide_st_style = """
             """
 st.markdown(hide_st_style, unsafe_allow_html=True)
 
-# 🔐 SISTEMA DE LOGIN
+# 🔐 LOGIN
 def check_password():
     def password_entered():
         if st.session_state["password"] == st.secrets["general"]["password"]:
@@ -58,20 +59,74 @@ if 'conn' in globals():
     except:
         pass
 
-# --- 3. VARIABLES DE SESIÓN ---
-if 'df_salidas' not in st.session_state: st.session_state.df_salidas = pd.DataFrame(columns=["Descripción", "Monto"])
-if 'df_transferencias' not in st.session_state: st.session_state.df_transferencias = pd.DataFrame(columns=["Monto"])
-if 'df_vales' not in st.session_state: st.session_state.df_vales = pd.DataFrame(columns=["Descripción", "Monto"])
-if 'df_errores' not in st.session_state: st.session_state.df_errores = pd.DataFrame(columns=["Monto"])
-if 'df_descuentos' not in st.session_state: st.session_state.df_descuentos = pd.DataFrame(columns=["Monto"])
-if 'df_proveedores' not in st.session_state: st.session_state.df_proveedores = pd.DataFrame(columns=["Proveedor", "Forma Pago", "Nro Factura", "Monto"])
+# --- 3. VARIABLES DE SESIÓN (Inicialización) ---
+def init_tables():
+    if 'df_salidas' not in st.session_state: st.session_state.df_salidas = pd.DataFrame(columns=["Descripción", "Monto"])
+    if 'df_transferencias' not in st.session_state: st.session_state.df_transferencias = pd.DataFrame(columns=["Monto"])
+    if 'df_vales' not in st.session_state: st.session_state.df_vales = pd.DataFrame(columns=["Descripción", "Monto"])
+    if 'df_errores' not in st.session_state: st.session_state.df_errores = pd.DataFrame(columns=["Monto"])
+    if 'df_descuentos' not in st.session_state: st.session_state.df_descuentos = pd.DataFrame(columns=["Monto"])
+    if 'df_proveedores' not in st.session_state: st.session_state.df_proveedores = pd.DataFrame(columns=["Proveedor", "Forma Pago", "Nro Factura", "Monto"])
 
-# Limpiezas
-if 'Descripción' in st.session_state.df_transferencias.columns: st.session_state.df_transferencias = pd.DataFrame(columns=["Monto"])
-if 'Descripción' in st.session_state.df_errores.columns: st.session_state.df_errores = pd.DataFrame(columns=["Monto"])
-if 'Descripción' in st.session_state.df_descuentos.columns: st.session_state.df_descuentos = pd.DataFrame(columns=["Monto"])
+init_tables()
 
-# --- 4. FUNCIÓN DE GUARDADO ---
+# --- 4. FUNCIONES DE MEMORIA (BORRADORES) ---
+def guardar_progreso(fecha_str):
+    """Guarda todo el estado actual en la hoja Borradores como un JSON."""
+    try:
+        # 1. Convertimos todo a un diccionario gigante
+        estado_actual = {
+            "df_salidas": st.session_state.df_salidas.to_dict('records'),
+            "df_transferencias": st.session_state.df_transferencias.to_dict('records'),
+            "df_vales": st.session_state.df_vales.to_dict('records'),
+            "df_errores": st.session_state.df_errores.to_dict('records'),
+            "df_descuentos": st.session_state.df_descuentos.to_dict('records'),
+            "df_proveedores": st.session_state.df_proveedores.to_dict('records'),
+            # Guardamos también los valores sueltos (necesitamos capturarlos del UI antes, 
+            # pero como Streamlit actualiza variables al interactuar, lo hacemos manual abajo)
+        }
+        
+        # Convertimos a texto JSON
+        json_data = json.dumps(estado_actual)
+        
+        # Guardamos en Hoja Borradores
+        df_borrador = pd.DataFrame([{"Fecha": fecha_str, "Datos": json_data}])
+        
+        # Leemos para ver si ya hay uno de hoy y reemplazarlo (limpieza básica)
+        try:
+            conn.update(worksheet="Borradores", data=df_borrador)
+            return True
+        except:
+            return False
+    except Exception as e:
+        st.error(f"Error al guardar progreso: {e}")
+        return False
+
+def cargar_progreso(fecha_str):
+    """Busca si hay un borrador de hoy y lo carga."""
+    try:
+        df_b = conn.read(worksheet="Borradores", ttl=0) # ttl=0 para leer fresco
+        # Filtramos por fecha
+        row = df_b[df_b["Fecha"] == fecha_str]
+        
+        if not row.empty:
+            json_data = row.iloc[-1]["Datos"] # El último guardado
+            data = json.loads(json_data)
+            
+            # Restauramos las tablas
+            st.session_state.df_salidas = pd.DataFrame(data["df_salidas"])
+            st.session_state.df_transferencias = pd.DataFrame(data["df_transferencias"])
+            st.session_state.df_vales = pd.DataFrame(data["df_vales"])
+            st.session_state.df_errores = pd.DataFrame(data["df_errores"])
+            st.session_state.df_descuentos = pd.DataFrame(data["df_descuentos"])
+            st.session_state.df_proveedores = pd.DataFrame(data["df_proveedores"])
+            
+            return True
+    except Exception as e:
+        st.error(f"No se pudo recuperar: {e}")
+    return False
+
+# --- 5. FUNCIÓN DE GUARDADO FINAL ---
 def guardar_todo_en_nube(datos_cierre, df_provs):
     try:
         # A. Historial
@@ -86,7 +141,6 @@ def guardar_todo_en_nube(datos_cierre, df_provs):
             pagos_reales["Fecha"] = datos_cierre["Fecha"]
             pagos_reales["Cajero"] = datos_cierre["Cajero"]
             pagos_reales = pagos_reales[["Fecha", "Proveedor", "Forma Pago", "Nro Factura", "Monto", "Cajero"]]
-            
             df_pagos_ant = conn.read(worksheet="Pagos_Proveedores")
             df_pagos_upd = pd.concat([df_pagos_ant, pagos_reales], ignore_index=True).fillna("")
             conn.update(worksheet="Pagos_Proveedores", data=df_pagos_upd)
@@ -95,7 +149,7 @@ def guardar_todo_en_nube(datos_cierre, df_provs):
         st.error(f"Error guardando en nube: {e}")
         return False
 
-# --- 5. FUNCIÓN PDF ---
+# --- 6. FUNCIÓN PDF ---
 def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital, efectivo_neto, 
                             df_salidas, df_transferencias, df_errores, df_vales, df_descuentos, df_proveedores, diferencia, desglose_digital):
     pdf = FPDF()
@@ -116,15 +170,13 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
     pdf.set_x(130); pdf.cell(60, 6, f"CAJERO: {cajero}", ln=1, align='R')
     pdf.ln(15); pdf.line(15, pdf.get_y(), 195, pdf.get_y()); pdf.ln(3)
 
-    # YA NO MOSTRAMOS CAJA INICIAL AQUÍ
-    
     def dibujar_kpi(titulo, monto):
         pdf.set_fill_color(240, 240, 240); pdf.set_font("Arial", 'B', 12)
         pdf.cell(0, 10, f"{titulo}: $ {monto:,.2f}", ln=1, align='C', fill=True, border=1)
         pdf.ln(2) 
 
     dibujar_kpi("1. BALANZA", balanza)
-    dibujar_kpi("2. EFECTIVO (Retiro)", efectivo_neto) # Aclaramos que es lo que se lleva
+    dibujar_kpi("2. EFECTIVO (Retiro)", efectivo_neto) 
     dibujar_kpi("3. DIGITAL", total_digital)
     
     pdf.ln(2); pdf.set_font("Arial", '', 10)
@@ -135,7 +187,6 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
     for k, v in desglose_digital.items():
         if v > 0: pdf.cell(130, 5, f" - {k}"); pdf.cell(40, 5, f"$ {v:,.2f}", align='R', ln=1)
     
-    # Detalle Efectivo simplificado (sin restas)
     pdf.ln(3); pdf.set_font("Arial", 'B', 11); pdf.cell(0, 8, "DETALLE EFECTIVO", ln=1); pdf.set_font("Arial", '', 9)
     pdf.cell(130, 5, " - Efectivo Contado (Ventas)"); pdf.cell(40, 5, f"$ {efectivo_neto:,.2f}", align='R', ln=1)
     
@@ -188,7 +239,7 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
     return pdf.output(dest="S").encode("latin-1")
 
 
-# --- 5. INTERFAZ UI ---
+# --- 7. INTERFAZ UI ---
 def input_tabla(titulo, key, solo_monto=False):
     st.markdown(f"**{titulo}**")
     cfg = {"Monto": st.column_config.NumberColumn("($)", format="$%d", width="medium")}
@@ -196,10 +247,33 @@ def input_tabla(titulo, key, solo_monto=False):
     df = st.data_editor(st.session_state[key], column_config=cfg, num_rows="dynamic", use_container_width=True, key=f"ed_{key}")
     return df, (df["Monto"].sum() if not df.empty else 0.0)
 
-# --- FORMULARIO ---
+# --- HEADER Y BOTONES DE MEMORIA ---
 st.title("Estancia San Francisco")
 
-# 1. FECHA (Caja anterior eliminada)
+# BOTONES DE GESTIÓN DE PROGRESO
+col_mem1, col_mem2 = st.columns(2)
+fecha_hoy_str = datetime.today().strftime("%Y-%m-%d")
+
+with col_mem1:
+    if st.button("💾 Guardar Progreso (Temporal)"):
+        with st.spinner("Guardando en borrador..."):
+            if guardar_progreso(fecha_hoy_str):
+                st.success("Progreso guardado. Podés cerrar la página.")
+            else:
+                st.error("Error al conectar con la hoja Borradores.")
+
+with col_mem2:
+    if st.button("🔄 Recuperar Datos de Hoy"):
+        with st.spinner("Buscando borrador..."):
+            if cargar_progreso(fecha_hoy_str):
+                st.success("¡Datos recuperados!")
+                st.rerun()
+            else:
+                st.warning("No encontré borradores guardados con fecha de hoy.")
+
+st.markdown("---")
+
+# 1. FECHA 
 col_enc1, col_enc2 = st.columns(2)
 with col_enc1: fecha_input = st.date_input("Fecha", datetime.today())
 with col_enc2: cajero = st.selectbox("Cajero de Turno", ["Santiago", "Leandro", "Natalia"])
@@ -230,7 +304,6 @@ with col_core1: registradora_total = st.number_input("Registradora (Z)", 0.0, st
 with col_core2: balanza_total = st.number_input("Balanza", 0.0, step=100.0)
 with col_core3: st.markdown("**Efectivo (Lo que se lleva)**")
 
-# Calculadora de Billetes (Ahora representa el TOTAL A RETIRAR)
 with st.expander("🧮 Calculadora de Billetes", expanded=True):
     cb1, cb2, cb3, cb4 = st.columns(4)
     with cb1: b_20000 = st.number_input("$20k", 0); b_500 = st.number_input("$500", 0)
@@ -240,7 +313,7 @@ with st.expander("🧮 Calculadora de Billetes", expanded=True):
     total_fisico = (b_20000*20000)+(b_10000*10000)+(b_2000*2000)+(b_1000*1000)+(b_500*500)+(b_200*200)+(b_100*100)+monedas
 
 st.info(f"💵 Efectivo (Ventas): ${total_fisico:,.2f}")
-efectivo_neto = total_fisico # Ya no se resta nada
+efectivo_neto = total_fisico 
 
 st.markdown("---")
 
@@ -265,7 +338,7 @@ st.markdown("**Pago a Proveedores**")
 columnas_proveedores = {
     "Proveedor": st.column_config.SelectboxColumn("Proveedor", options=lista_proveedores, required=True, width="medium"),
     "Forma Pago": st.column_config.SelectboxColumn("Método", options=["Efectivo", "Digital / Banco"], required=True, width="small"),
-    "Nro Factura": st.column_config.TextColumn("Nro Factura", width="medium"), # Ahora es siempre visible
+    "Nro Factura": st.column_config.TextColumn("Nro Factura", width="medium"), 
     "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0)
 }
 df_proveedores = st.data_editor(st.session_state.df_proveedores, column_config=columnas_proveedores, num_rows="dynamic", use_container_width=True, key="ed_proveedores")
@@ -283,8 +356,6 @@ st.caption(f"Total Salidas Varios: ${total_salidas:,.2f}")
 st.markdown("---")
 
 # 10. RESULTADO
-# Ya no hay "Queda para mañana" porque el dueño separa eso fisicamente.
-# Solo mostramos el resultado
 st.markdown("### Resultado del Cierre")
 
 # CÁLCULOS FINALES
@@ -313,7 +384,7 @@ with col_final2:
         st.download_button("Descargar", data=pdf_bytes, file_name=f"Cierre_{fecha_input}.pdf", mime="application/pdf", use_container_width=True)
     
     if 'conn' in globals():
-        if st.button("☁️ Guardar Nube", use_container_width=True):
+        if st.button("☁️ Guardar Nube (Cierre Final)", use_container_width=True, type="primary"):
             estado_caja = "FALTANTE" if diferencia > 0 else ("SOBRANTE" if diferencia < 0 else "OK")
             total_salidas_reporte = total_salidas + total_prov_efectivo
             datos_cierre = {
@@ -330,9 +401,9 @@ with col_final2:
                 "Diferencia": diferencia,
                 "Estado": estado_caja
             }
-            with st.spinner("Guardando..."):
+            with st.spinner("Guardando Cierre..."):
                 if guardar_todo_en_nube(datos_cierre, df_proveedores):
-                    st.success("✅ Guardado Correctamente")
+                    st.success("✅ Cierre Guardado Correctamente")
                     st.balloons()
 
 # --- DIRECTORIO AL FINAL ---
