@@ -62,11 +62,9 @@ if 'conn' in globals():
 # --- 3. VARIABLES DE SESIÓN (BLINDADAS) ---
 def asegurar_columnas(df, columnas_requeridas):
     """Si faltan columnas en un DF (por cargar datos viejos), las agrega vacías."""
-    # Si df es None o una lista vacía, creamos un DF vacío con las columnas correctas
     if df is None or (isinstance(df, list) and len(df) == 0) or (isinstance(df, pd.DataFrame) and df.empty):
         return pd.DataFrame(columns=columnas_requeridas)
     
-    # Si es un DF con datos, aseguramos las columnas
     if isinstance(df, pd.DataFrame):
         for col in columnas_requeridas:
             if col not in df.columns:
@@ -89,8 +87,6 @@ init_tables()
 # --- 4. FUNCIONES DE MEMORIA (BORRADORES) ---
 def guardar_progreso(fecha_str):
     try:
-        # Convertimos DataFrames a diccionarios (JSON serializable)
-        # IMPORTANTE: st.session_state ya debe tener los datos actualizados (gracias a la sincro abajo)
         estado_actual = {
             "df_salidas": st.session_state.df_salidas.to_dict('records'),
             "df_transferencias": st.session_state.df_transferencias.to_dict('records'),
@@ -101,7 +97,6 @@ def guardar_progreso(fecha_str):
         }
         json_data = json.dumps(estado_actual)
         df_borrador = pd.DataFrame([{"Fecha": fecha_str, "Datos": json_data}])
-        
         try:
             conn.update(worksheet="Borradores", data=df_borrador)
             return True
@@ -120,7 +115,6 @@ def cargar_progreso(fecha_str):
             json_data = row.iloc[-1]["Datos"]
             data = json.loads(json_data)
             
-            # Restauramos y ASEGURAMOS las columnas (evita el error de tabla vacía/gris)
             st.session_state.df_salidas = asegurar_columnas(pd.DataFrame(data["df_salidas"]), ["Descripción", "Monto"])
             st.session_state.df_transferencias = asegurar_columnas(pd.DataFrame(data["df_transferencias"]), ["Monto"])
             st.session_state.df_vales = asegurar_columnas(pd.DataFrame(data["df_vales"]), ["Descripción", "Monto"])
@@ -136,13 +130,11 @@ def cargar_progreso(fecha_str):
 # --- 5. FUNCIÓN DE GUARDADO FINAL ---
 def guardar_todo_en_nube(datos_cierre, df_provs):
     try:
-        # A. Historial
         df_historial = conn.read(worksheet="Historial")
         fila_cierre = pd.DataFrame([datos_cierre])
         df_historial_upd = pd.concat([df_historial, fila_cierre], ignore_index=True).fillna("")
         conn.update(worksheet="Historial", data=df_historial_upd)
         
-        # B. Proveedores
         pagos_reales = df_provs[df_provs["Monto"] > 0].copy()
         if not pagos_reales.empty:
             pagos_reales = asegurar_columnas(pagos_reales, ["Proveedor", "Forma Pago", "Nro Factura", "Monto"])
@@ -249,16 +241,16 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
 
 
 # --- 7. INTERFAZ UI ---
-# MODIFICADO: Sincronización explícita
+# MODIFICADO: hide_index=True y Sincronización explícita
 def input_tabla(titulo, key, solo_monto=False):
     st.markdown(f"**{titulo}**")
     cfg = {"Monto": st.column_config.NumberColumn("($)", format="$%d", width="medium")}
     if not solo_monto: cfg["Descripción"] = st.column_config.TextColumn("Detalle", required=True)
     
-    # Renderizamos la tabla
-    df_editado = st.data_editor(st.session_state[key], column_config=cfg, num_rows="dynamic", use_container_width=True, key=f"ed_{key}")
+    # hide_index=True para borrar la columna de la izquierda
+    df_editado = st.data_editor(st.session_state[key], column_config=cfg, num_rows="dynamic", use_container_width=True, key=f"ed_{key}", hide_index=True)
     
-    # CRÍTICO: Actualizamos el session_state inmediatamente con lo que se editó
+    # Sincronizamos YA MISMO para que no se pierda al recargar
     st.session_state[key] = df_editado
     
     return df_editado, (df_editado["Monto"].sum() if not df_editado.empty else 0.0)
@@ -357,15 +349,13 @@ columnas_proveedores = {
     "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0)
 }
 
-# Verificamos estructura
 if 'df_proveedores' in st.session_state:
     st.session_state.df_proveedores = asegurar_columnas(st.session_state.df_proveedores, ["Proveedor", "Forma Pago", "Nro Factura", "Monto"])
 
-# Renderizamos y sincronizamos
-df_proveedores = st.data_editor(st.session_state.df_proveedores, column_config=columnas_proveedores, num_rows="dynamic", use_container_width=True, key="ed_proveedores")
-st.session_state.df_proveedores = df_proveedores # <--- SINCRONIZACIÓN IMPORTANTE
+# hide_index=True y Sincronización Manual para Proveedores
+df_proveedores = st.data_editor(st.session_state.df_proveedores, column_config=columnas_proveedores, num_rows="dynamic", use_container_width=True, key="ed_proveedores", hide_index=True)
+st.session_state.df_proveedores = df_proveedores 
 
-# Cálculos seguros
 try:
     total_prov_efectivo = df_proveedores[df_proveedores["Forma Pago"] == "Efectivo"]["Monto"].sum()
     total_prov_digital = df_proveedores[df_proveedores["Forma Pago"] == "Digital / Banco"]["Monto"].sum()
