@@ -97,7 +97,6 @@ def guardar_todo_en_nube(datos_cierre, df_provs):
 
 # --- 5. FUNCIÓN PDF ---
 def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital, efectivo_neto, 
-                            caja_inicial, total_fisico, caja_proxima, retiro,
                             df_salidas, df_transferencias, df_errores, df_vales, df_descuentos, df_proveedores, diferencia, desglose_digital):
     pdf = FPDF()
     pdf.add_page()
@@ -117,17 +116,15 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
     pdf.set_x(130); pdf.cell(60, 6, f"CAJERO: {cajero}", ln=1, align='R')
     pdf.ln(15); pdf.line(15, pdf.get_y(), 195, pdf.get_y()); pdf.ln(3)
 
-    pdf.set_font("Arial", 'B', 12)
-    pdf.cell(0, 10, f"CAJA INICIAL (Apertura): $ {caja_inicial:,.2f}", ln=1, align='L')
-    pdf.ln(3)
-
+    # YA NO MOSTRAMOS CAJA INICIAL AQUÍ
+    
     def dibujar_kpi(titulo, monto):
         pdf.set_fill_color(240, 240, 240); pdf.set_font("Arial", 'B', 12)
         pdf.cell(0, 10, f"{titulo}: $ {monto:,.2f}", ln=1, align='C', fill=True, border=1)
         pdf.ln(2) 
 
     dibujar_kpi("1. BALANZA", balanza)
-    dibujar_kpi("2. EFECTIVO", efectivo_neto)
+    dibujar_kpi("2. EFECTIVO (Retiro)", efectivo_neto) # Aclaramos que es lo que se lleva
     dibujar_kpi("3. DIGITAL", total_digital)
     
     pdf.ln(2); pdf.set_font("Arial", '', 10)
@@ -138,15 +135,10 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
     for k, v in desglose_digital.items():
         if v > 0: pdf.cell(130, 5, f" - {k}"); pdf.cell(40, 5, f"$ {v:,.2f}", align='R', ln=1)
     
+    # Detalle Efectivo simplificado (sin restas)
     pdf.ln(3); pdf.set_font("Arial", 'B', 11); pdf.cell(0, 8, "DETALLE EFECTIVO", ln=1); pdf.set_font("Arial", '', 9)
-    pdf.cell(130, 5, " - Recuento Total Cajón"); pdf.cell(40, 5, f"$ {total_fisico:,.2f}", align='R', ln=1)
-    pdf.cell(130, 5, " - (Menos) Caja Inicial"); pdf.cell(40, 5, f"-$ {caja_inicial:,.2f}", align='R', ln=1)
+    pdf.cell(130, 5, " - Efectivo Contado (Ventas)"); pdf.cell(40, 5, f"$ {efectivo_neto:,.2f}", align='R', ln=1)
     
-    pdf.ln(2); pdf.set_font("Arial", 'B', 9); pdf.cell(130, 5, "DESTINO:"); pdf.set_font("Arial", '', 9)
-    pdf.cell(40, 5, "", ln=1)
-    pdf.cell(130, 5, "   -> Queda (Caja Mañana):"); pdf.cell(40, 5, f"$ {caja_proxima:,.2f}", align='R', ln=1)
-    pdf.cell(130, 5, "   -> Se Retira:"); pdf.cell(40, 5, f"$ {retiro:,.2f}", align='R', ln=1)
-
     pdf.ln(5); pdf.set_font("Arial", 'B', 11); pdf.cell(0, 8, "C. AJUSTES Y PROVEEDORES", ln=1)
 
     def dibujar_tabla(titulo, df, estilo="lista", label_fijo=None):
@@ -207,11 +199,10 @@ def input_tabla(titulo, key, solo_monto=False):
 # --- FORMULARIO ---
 st.title("Estancia San Francisco")
 
-# 1. FECHA y CAJA ANTERIOR
-c1, c2 = st.columns(2)
-with c1: fecha_input = st.date_input("Fecha", datetime.today())
-with c2: caja_inicial = st.number_input("Caja (Día Anterior)", 0.0, step=100.0)
-cajero = st.selectbox("Cajero de Turno", ["Santiago", "Leandro", "Natalia"])
+# 1. FECHA (Caja anterior eliminada)
+col_enc1, col_enc2 = st.columns(2)
+with col_enc1: fecha_input = st.date_input("Fecha", datetime.today())
+with col_enc2: cajero = st.selectbox("Cajero de Turno", ["Santiago", "Leandro", "Natalia"])
 st.markdown("---")
 
 # 2. SOMOS AVELLANEDA
@@ -237,8 +228,9 @@ st.markdown("---")
 col_core1, col_core2, col_core3 = st.columns(3)
 with col_core1: registradora_total = st.number_input("Registradora (Z)", 0.0, step=100.0)
 with col_core2: balanza_total = st.number_input("Balanza", 0.0, step=100.0)
-with col_core3: st.markdown("**Efectivo (Físico)**")
+with col_core3: st.markdown("**Efectivo (Lo que se lleva)**")
 
+# Calculadora de Billetes (Ahora representa el TOTAL A RETIRAR)
 with st.expander("🧮 Calculadora de Billetes", expanded=True):
     cb1, cb2, cb3, cb4 = st.columns(4)
     with cb1: b_20000 = st.number_input("$20k", 0); b_500 = st.number_input("$500", 0)
@@ -247,8 +239,9 @@ with st.expander("🧮 Calculadora de Billetes", expanded=True):
     with cb4: b_1000 = st.number_input("$1k", 0); monedas = st.number_input("Mon", 0.0)
     total_fisico = (b_20000*20000)+(b_10000*10000)+(b_2000*2000)+(b_1000*1000)+(b_500*500)+(b_200*200)+(b_100*100)+monedas
 
-st.info(f"💵 Total Efectivo: ${total_fisico:,.2f}")
-efectivo_neto = total_fisico - caja_inicial
+st.info(f"💵 Efectivo (Ventas): ${total_fisico:,.2f}")
+efectivo_neto = total_fisico # Ya no se resta nada
+
 st.markdown("---")
 
 # 6. DIGITAL
@@ -272,7 +265,7 @@ st.markdown("**Pago a Proveedores**")
 columnas_proveedores = {
     "Proveedor": st.column_config.SelectboxColumn("Proveedor", options=lista_proveedores, required=True, width="medium"),
     "Forma Pago": st.column_config.SelectboxColumn("Método", options=["Efectivo", "Digital / Banco"], required=True, width="small"),
-    "Nro Factura": st.column_config.TextColumn("Nro Factura", width="medium"),
+    "Nro Factura": st.column_config.TextColumn("Nro Factura", width="medium"), # Ahora es siempre visible
     "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0)
 }
 df_proveedores = st.data_editor(st.session_state.df_proveedores, column_config=columnas_proveedores, num_rows="dynamic", use_container_width=True, key="ed_proveedores")
@@ -290,16 +283,15 @@ st.caption(f"Total Salidas Varios: ${total_salidas:,.2f}")
 st.markdown("---")
 
 # 10. RESULTADO
-col_dest1, col_dest2 = st.columns(2)
-with col_dest1: caja_proxima = st.number_input("Queda para Mañana", 0.0, step=100.0)
-with col_dest2: retiro = total_fisico - caja_proxima
+# Ya no hay "Queda para mañana" porque el dueño separa eso fisicamente.
+# Solo mostramos el resultado
+st.markdown("### Resultado del Cierre")
 
 # CÁLCULOS FINALES
 total_gastos_fisicos = total_salidas + total_prov_efectivo
 total_justificado = total_digital + efectivo_neto + total_transf_in + total_gastos_fisicos + total_errores + total_vales + total_descuentos
 diferencia = balanza_total - total_justificado
 
-st.markdown("### Resultado")
 col_final1, col_final2 = st.columns([2, 1])
 
 with col_final1:
@@ -315,8 +307,7 @@ with col_final2:
         desglose_digital = {"Mercado Pago": mp, "Nave": nave, "Clover": clover, "BBVA": bbva}
         pdf_bytes = generar_pdf_profesional(
             fecha_input, cajero, balanza_total, registradora_total, total_digital, 
-            efectivo_neto, caja_inicial, total_fisico, caja_proxima, retiro,
-            df_salidas, df_transferencias, df_errores, df_vales, df_descuentos, df_proveedores,
+            efectivo_neto, df_salidas, df_transferencias, df_errores, df_vales, df_descuentos, df_proveedores,
             diferencia, desglose_digital
         )
         st.download_button("Descargar", data=pdf_bytes, file_name=f"Cierre_{fecha_input}.pdf", mime="application/pdf", use_container_width=True)
@@ -326,10 +317,18 @@ with col_final2:
             estado_caja = "FALTANTE" if diferencia > 0 else ("SOBRANTE" if diferencia < 0 else "OK")
             total_salidas_reporte = total_salidas + total_prov_efectivo
             datos_cierre = {
-                "Fecha": fecha_input.strftime("%d/%m/%Y"), "Cajero": cajero,
-                "Balanza": balanza_total, "Digital": total_digital, "Efectivo": efectivo_neto,
-                "Transferencias": total_transf_in, "Salidas": total_salidas_reporte, "Vales": total_vales,
-                "Errores": total_errores, "Descuentos": total_descuentos, "Diferencia": diferencia, "Estado": estado_caja
+                "Fecha": fecha_input.strftime("%d/%m/%Y"),
+                "Cajero": cajero,
+                "Balanza": balanza_total,
+                "Digital": total_digital,
+                "Efectivo": efectivo_neto,
+                "Transferencias": total_transf_in,
+                "Salidas": total_salidas_reporte,
+                "Vales": total_vales,
+                "Errores": total_errores,
+                "Descuentos": total_descuentos,
+                "Diferencia": diferencia,
+                "Estado": estado_caja
             }
             with st.spinner("Guardando..."):
                 if guardar_todo_en_nube(datos_cierre, df_proveedores):
