@@ -59,22 +59,33 @@ if 'conn' in globals():
     except:
         pass
 
-# --- 3. VARIABLES DE SESIÓN (Inicialización) ---
+# --- 3. VARIABLES DE SESIÓN (BLINDADAS) ---
+def asegurar_columnas(df, columnas_requeridas):
+    """Si faltan columnas en un DF (por cargar datos viejos), las agrega vacías."""
+    for col in columnas_requeridas:
+        if col not in df.columns:
+            if col == "Monto":
+                df[col] = 0.0
+            else:
+                df[col] = ""
+    return df
+
 def init_tables():
     if 'df_salidas' not in st.session_state: st.session_state.df_salidas = pd.DataFrame(columns=["Descripción", "Monto"])
     if 'df_transferencias' not in st.session_state: st.session_state.df_transferencias = pd.DataFrame(columns=["Monto"])
     if 'df_vales' not in st.session_state: st.session_state.df_vales = pd.DataFrame(columns=["Descripción", "Monto"])
     if 'df_errores' not in st.session_state: st.session_state.df_errores = pd.DataFrame(columns=["Monto"])
     if 'df_descuentos' not in st.session_state: st.session_state.df_descuentos = pd.DataFrame(columns=["Monto"])
-    if 'df_proveedores' not in st.session_state: st.session_state.df_proveedores = pd.DataFrame(columns=["Proveedor", "Forma Pago", "Nro Factura", "Monto"])
+    
+    # Proveedores con columnas fijas
+    if 'df_proveedores' not in st.session_state: 
+        st.session_state.df_proveedores = pd.DataFrame(columns=["Proveedor", "Forma Pago", "Nro Factura", "Monto"])
 
 init_tables()
 
 # --- 4. FUNCIONES DE MEMORIA (BORRADORES) ---
 def guardar_progreso(fecha_str):
-    """Guarda todo el estado actual en la hoja Borradores como un JSON."""
     try:
-        # 1. Convertimos todo a un diccionario gigante
         estado_actual = {
             "df_salidas": st.session_state.df_salidas.to_dict('records'),
             "df_transferencias": st.session_state.df_transferencias.to_dict('records'),
@@ -82,17 +93,9 @@ def guardar_progreso(fecha_str):
             "df_errores": st.session_state.df_errores.to_dict('records'),
             "df_descuentos": st.session_state.df_descuentos.to_dict('records'),
             "df_proveedores": st.session_state.df_proveedores.to_dict('records'),
-            # Guardamos también los valores sueltos (necesitamos capturarlos del UI antes, 
-            # pero como Streamlit actualiza variables al interactuar, lo hacemos manual abajo)
         }
-        
-        # Convertimos a texto JSON
         json_data = json.dumps(estado_actual)
-        
-        # Guardamos en Hoja Borradores
         df_borrador = pd.DataFrame([{"Fecha": fecha_str, "Datos": json_data}])
-        
-        # Leemos para ver si ya hay uno de hoy y reemplazarlo (limpieza básica)
         try:
             conn.update(worksheet="Borradores", data=df_borrador)
             return True
@@ -103,27 +106,28 @@ def guardar_progreso(fecha_str):
         return False
 
 def cargar_progreso(fecha_str):
-    """Busca si hay un borrador de hoy y lo carga."""
     try:
-        df_b = conn.read(worksheet="Borradores", ttl=0) # ttl=0 para leer fresco
-        # Filtramos por fecha
+        df_b = conn.read(worksheet="Borradores", ttl=0)
         row = df_b[df_b["Fecha"] == fecha_str]
         
         if not row.empty:
-            json_data = row.iloc[-1]["Datos"] # El último guardado
+            json_data = row.iloc[-1]["Datos"]
             data = json.loads(json_data)
             
-            # Restauramos las tablas
+            # Restauramos y ASEGURAMOS que tengan las columnas correctas
             st.session_state.df_salidas = pd.DataFrame(data["df_salidas"])
             st.session_state.df_transferencias = pd.DataFrame(data["df_transferencias"])
             st.session_state.df_vales = pd.DataFrame(data["df_vales"])
             st.session_state.df_errores = pd.DataFrame(data["df_errores"])
             st.session_state.df_descuentos = pd.DataFrame(data["df_descuentos"])
-            st.session_state.df_proveedores = pd.DataFrame(data["df_proveedores"])
+            
+            # Corrección del error KeyError aquí:
+            df_prov_temp = pd.DataFrame(data["df_proveedores"])
+            st.session_state.df_proveedores = asegurar_columnas(df_prov_temp, ["Proveedor", "Forma Pago", "Nro Factura", "Monto"])
             
             return True
     except Exception as e:
-        st.error(f"No se pudo recuperar: {e}")
+        st.error(f"No se pudo recuperar (Formato incompatible): {e}")
     return False
 
 # --- 5. FUNCIÓN DE GUARDADO FINAL ---
@@ -138,9 +142,13 @@ def guardar_todo_en_nube(datos_cierre, df_provs):
         # B. Proveedores
         pagos_reales = df_provs[df_provs["Monto"] > 0].copy()
         if not pagos_reales.empty:
+            # Asegurar columnas antes de guardar
+            pagos_reales = asegurar_columnas(pagos_reales, ["Proveedor", "Forma Pago", "Nro Factura", "Monto"])
+            
             pagos_reales["Fecha"] = datos_cierre["Fecha"]
             pagos_reales["Cajero"] = datos_cierre["Cajero"]
             pagos_reales = pagos_reales[["Fecha", "Proveedor", "Forma Pago", "Nro Factura", "Monto", "Cajero"]]
+            
             df_pagos_ant = conn.read(worksheet="Pagos_Proveedores")
             df_pagos_upd = pd.concat([df_pagos_ant, pagos_reales], ignore_index=True).fillna("")
             conn.update(worksheet="Pagos_Proveedores", data=df_pagos_upd)
@@ -250,7 +258,6 @@ def input_tabla(titulo, key, solo_monto=False):
 # --- HEADER Y BOTONES DE MEMORIA ---
 st.title("Estancia San Francisco")
 
-# BOTONES DE GESTIÓN DE PROGRESO
 col_mem1, col_mem2 = st.columns(2)
 fecha_hoy_str = datetime.today().strftime("%Y-%m-%d")
 
@@ -258,7 +265,7 @@ with col_mem1:
     if st.button("💾 Guardar Progreso (Temporal)"):
         with st.spinner("Guardando en borrador..."):
             if guardar_progreso(fecha_hoy_str):
-                st.success("Progreso guardado. Podés cerrar la página.")
+                st.success("Progreso guardado.")
             else:
                 st.error("Error al conectar con la hoja Borradores.")
 
@@ -341,10 +348,20 @@ columnas_proveedores = {
     "Nro Factura": st.column_config.TextColumn("Nro Factura", width="medium"), 
     "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0)
 }
+# --- CORRECCIÓN CLAVE: INICIALIZAR Y VERIFICAR COLUMNAS ---
+if 'df_proveedores' in st.session_state:
+    st.session_state.df_proveedores = asegurar_columnas(st.session_state.df_proveedores, ["Proveedor", "Forma Pago", "Nro Factura", "Monto"])
+
 df_proveedores = st.data_editor(st.session_state.df_proveedores, column_config=columnas_proveedores, num_rows="dynamic", use_container_width=True, key="ed_proveedores")
 
-total_prov_efectivo = df_proveedores[df_proveedores["Forma Pago"] == "Efectivo"]["Monto"].sum()
-total_prov_digital = df_proveedores[df_proveedores["Forma Pago"] == "Digital / Banco"]["Monto"].sum()
+# Cálculo Seguro
+try:
+    total_prov_efectivo = df_proveedores[df_proveedores["Forma Pago"] == "Efectivo"]["Monto"].sum()
+    total_prov_digital = df_proveedores[df_proveedores["Forma Pago"] == "Digital / Banco"]["Monto"].sum()
+except KeyError:
+    # Si falla por alguna razón rara, asumimos 0 para no romper la app
+    total_prov_efectivo = 0.0
+    total_prov_digital = 0.0
 
 if total_prov_efectivo > 0: st.warning(f"📉 Se descontarán ${total_prov_efectivo:,.2f} de la CAJA (Pagos en Efectivo).")
 if total_prov_digital > 0: st.info(f"ℹ️ Pagos Digitales/Banco: ${total_prov_digital:,.2f} (No afectan caja).")
