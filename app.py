@@ -4,14 +4,12 @@ from datetime import datetime
 from fpdf import FPDF
 import os
 from streamlit_gsheets import GSheetsConnection
+import streamlit.components.v1 as components
 
 # --- 1. CONFIGURACIÓN Y LOGIN ---
 st.set_page_config(page_title="Cierre de Caja", layout="centered")
 
-import streamlit.components.v1 as components
-
 # ESCUDO ANTI-CIERRE ACCIDENTAL
-# Esto inyecta un script que pregunta "¿Seguro?" si intentan cerrar la pestaña
 js_warning = """
 <script>
     window.addEventListener("beforeunload", function (e) {
@@ -33,7 +31,7 @@ hide_st_style = """
             """
 st.markdown(hide_st_style, unsafe_allow_html=True)
 
-# SISTEMA DE LOGIN
+# 🔐 SISTEMA DE LOGIN
 def check_password():
     def password_entered():
         if st.session_state["password"] == st.secrets["general"]["password"]:
@@ -45,10 +43,10 @@ def check_password():
     if st.session_state.get("password_correct", False):
         return True
 
-    st.title("Acceso Restringido")
+    st.title("🔒 Acceso Restringido")
     st.text_input("Ingresá la contraseña del local:", type="password", on_change=password_entered, key="password")
     if "password_correct" in st.session_state and not st.session_state["password_correct"]:
-        st.error("Contraseña incorrecta")
+        st.error("😕 Contraseña incorrecta")
     return False
 
 if not check_password():
@@ -139,7 +137,7 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
         pdf.ln(2) 
 
     dibujar_kpi("1. BALANZA", balanza)
-    dibujar_kpi("2. EFECTIVO", efectivo_neto) # Aclaramos que es lo que se lleva
+    dibujar_kpi("2. EFECTIVO (Retiro)", efectivo_neto) # Aclaramos que es lo que se lleva
     dibujar_kpi("3. DIGITAL", total_digital)
     
     pdf.ln(2); pdf.set_font("Arial", '', 10)
@@ -243,10 +241,10 @@ st.markdown("---")
 col_core1, col_core2, col_core3 = st.columns(3)
 with col_core1: registradora_total = st.number_input("Registradora (Z)", 0.0, step=100.0)
 with col_core2: balanza_total = st.number_input("Balanza", 0.0, step=100.0)
-with col_core3: st.markdown("**Efectivo**")
+with col_core3: st.markdown("**Efectivo (Lo que se lleva)**")
 
 # Calculadora de Billetes (Ahora representa el TOTAL A RETIRAR)
-with st.expander("Calculadora de Billetes", expanded=True):
+with st.expander("🧮 Calculadora de Billetes", expanded=True):
     cb1, cb2, cb3, cb4 = st.columns(4)
     with cb1: b_20000 = st.number_input("$20k", 0); b_500 = st.number_input("$500", 0)
     with cb2: b_10000 = st.number_input("$10k", 0); b_200 = st.number_input("$200", 0)
@@ -254,7 +252,7 @@ with st.expander("Calculadora de Billetes", expanded=True):
     with cb4: b_1000 = st.number_input("$1k", 0); monedas = st.number_input("Mon", 0.0)
     total_fisico = (b_20000*20000)+(b_10000*10000)+(b_2000*2000)+(b_1000*1000)+(b_500*500)+(b_200*200)+(b_100*100)+monedas
 
-st.info(f"💵 Efectivo: ${total_fisico:,.2f}")
+st.info(f"💵 Efectivo (Ventas): ${total_fisico:,.2f}")
 efectivo_neto = total_fisico # Ya no se resta nada
 
 st.markdown("---")
@@ -288,8 +286,8 @@ df_proveedores = st.data_editor(st.session_state.df_proveedores, column_config=c
 total_prov_efectivo = df_proveedores[df_proveedores["Forma Pago"] == "Efectivo"]["Monto"].sum()
 total_prov_digital = df_proveedores[df_proveedores["Forma Pago"] == "Digital / Banco"]["Monto"].sum()
 
-if total_prov_efectivo > 0: st.warning(f"Se descontarán ${total_prov_efectivo:,.2f} de la CAJA (Pagos en Efectivo).")
-if total_prov_digital > 0: st.info(f"Pagos Digitales/Banco: ${total_prov_digital:,.2f} (No afectan caja).")
+if total_prov_efectivo > 0: st.warning(f"📉 Se descontarán ${total_prov_efectivo:,.2f} de la CAJA (Pagos en Efectivo).")
+if total_prov_digital > 0: st.info(f"ℹ️ Pagos Digitales/Banco: ${total_prov_digital:,.2f} (No afectan caja).")
 st.markdown("---")
 
 # 9. SALIDA DE CAJA (GASTOS VARIOS)
@@ -301,6 +299,17 @@ st.markdown("---")
 # Ya no hay "Queda para mañana" porque el dueño separa eso fisicamente.
 # Solo mostramos el resultado
 st.markdown("### Resultado del Cierre")
+
+# NUEVO: CÁLCULO DE PORCENTAJES Y MIX DE VENTAS
+total_venta_bruta = efectivo_neto + total_digital
+if total_venta_bruta > 0:
+    pct_efectivo = (efectivo_neto / total_venta_bruta) * 100
+    pct_digital = (total_digital / total_venta_bruta) * 100
+    
+    st.caption(f"📊 Mix de Ventas: Efectivo {pct_efectivo:.1f}% vs Digital {pct_digital:.1f}%")
+    st.progress(int(pct_efectivo), text="Porcentaje en Efectivo (Azul) vs Digital (Gris)")
+else:
+    st.caption("📊 Sin ventas registradas aún.")
 
 # CÁLCULOS FINALES
 total_gastos_fisicos = total_salidas + total_prov_efectivo
@@ -318,7 +327,7 @@ with col_final1:
 
 with col_final2:
     st.write("")
-    if st.button("Generar PDF", use_container_width=True):
+    if st.button("📄 Generar PDF", use_container_width=True):
         desglose_digital = {"Mercado Pago": mp, "Nave": nave, "Clover": clover, "BBVA": bbva}
         pdf_bytes = generar_pdf_profesional(
             fecha_input, cajero, balanza_total, registradora_total, total_digital, 
@@ -328,7 +337,7 @@ with col_final2:
         st.download_button("Descargar", data=pdf_bytes, file_name=f"Cierre_{fecha_input}.pdf", mime="application/pdf", use_container_width=True)
     
     if 'conn' in globals():
-        if st.button("Guardar Nube", use_container_width=True):
+        if st.button("☁️ Guardar Nube", use_container_width=True):
             estado_caja = "FALTANTE" if diferencia > 0 else ("SOBRANTE" if diferencia < 0 else "OK")
             total_salidas_reporte = total_salidas + total_prov_efectivo
             datos_cierre = {
@@ -347,11 +356,11 @@ with col_final2:
             }
             with st.spinner("Guardando..."):
                 if guardar_todo_en_nube(datos_cierre, df_proveedores):
-                    st.success("Guardado Correctamente")
+                    st.success("✅ Guardado Correctamente")
                     st.balloons()
 
 # --- DIRECTORIO AL FINAL ---
 st.markdown("---")
 if not df_directorio.empty:
-    with st.expander("Ver Directorio de Proveedores (Alias/CUIT)"):
+    with st.expander("📖 Ver Directorio de Proveedores (Alias/CUIT)"):
         st.dataframe(df_directorio, use_container_width=True)
