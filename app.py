@@ -108,7 +108,7 @@ def guardar_todo_en_nube(datos_cierre, df_provs):
         st.error(f"Error guardando en nube: {e}")
         return False
 
-# --- 5. FUNCIÓN PDF ---
+# --- 5. FUNCIÓN PDF (CON ANALYTICS) ---
 def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital, efectivo_neto, 
                             df_salidas, df_transferencias, df_errores, df_vales, df_descuentos, df_proveedores, diferencia, desglose_digital):
     pdf = FPDF()
@@ -129,26 +129,25 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
     pdf.set_x(130); pdf.cell(60, 6, f"CAJERO: {cajero}", ln=1, align='R')
     pdf.ln(15); pdf.line(15, pdf.get_y(), 195, pdf.get_y()); pdf.ln(3)
 
-    # YA NO MOSTRAMOS CAJA INICIAL AQUÍ
-    
+    # 1. KPIs PRINCIPALES
     def dibujar_kpi(titulo, monto):
         pdf.set_fill_color(240, 240, 240); pdf.set_font("Arial", 'B', 12)
         pdf.cell(0, 10, f"{titulo}: $ {monto:,.2f}", ln=1, align='C', fill=True, border=1)
         pdf.ln(2) 
 
     dibujar_kpi("1. BALANZA", balanza)
-    dibujar_kpi("2. EFECTIVO (Retiro)", efectivo_neto) # Aclaramos que es lo que se lleva
+    dibujar_kpi("2. EFECTIVO (Retiro)", efectivo_neto)
     dibujar_kpi("3. DIGITAL", total_digital)
     
     pdf.ln(2); pdf.set_font("Arial", '', 10)
     pdf.cell(0, 6, f"Ticket Fiscal (Z): $ {registradora:,.2f}", border=0, align='C', ln=1)
     pdf.ln(5)
 
+    # 2. DETALLES NUMÉRICOS
     pdf.set_font("Arial", 'B', 11); pdf.cell(0, 8, "DETALLE DIGITAL", ln=1); pdf.set_font("Arial", '', 9)
     for k, v in desglose_digital.items():
         if v > 0: pdf.cell(130, 5, f" - {k}"); pdf.cell(40, 5, f"$ {v:,.2f}", align='R', ln=1)
     
-    # Detalle Efectivo simplificado (sin restas)
     pdf.ln(3); pdf.set_font("Arial", 'B', 11); pdf.cell(0, 8, "DETALLE EFECTIVO", ln=1); pdf.set_font("Arial", '', 9)
     pdf.cell(130, 5, " - Efectivo Contado (Ventas)"); pdf.cell(40, 5, f"$ {efectivo_neto:,.2f}", align='R', ln=1)
     
@@ -191,12 +190,62 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
     dibujar_tabla("ERRORES DE BALANZA", df_errores, estilo='fijo', label_fijo="Error de Facturación")
     dibujar_tabla("DESCUENTOS AVELLANEDA", df_descuentos, estilo='grilla')
 
-    y_start_box = pdf.get_y()
-    if y_start_box > 250: pdf.add_page(); y_start_box = 20
+    # ==========================================
+    # 3. SECCIÓN DATA ANALYTICS (NUEVO)
+    # ==========================================
+    if pdf.get_y() > 220: pdf.add_page()
+    pdf.ln(5)
+    pdf.set_font("Arial", 'B', 11); pdf.cell(0, 8, "D. INDICADORES DE GESTIÓN (ANALYTICS)", ln=1)
+    
+    # Cálculo de métricas
+    total_venta = efectivo_neto + total_digital
+    pct_efectivo = (efectivo_neto / total_venta * 100) if total_venta > 0 else 0
+    pct_digital = (total_digital / total_venta * 100) if total_venta > 0 else 0
+    
+    total_salidas_todo = df_salidas['Monto'].sum() + df_proveedores[df_proveedores["Forma Pago"] == "Efectivo"]["Monto"].sum() + df_vales['Monto'].sum()
+    ratio_gastos = (total_salidas_todo / total_venta * 100) if total_venta > 0 else 0
+
+    # DIBUJO DE BARRA DE PORCENTAJE (MIX DE VENTAS)
+    pdf.set_font("Arial", '', 9)
+    pdf.cell(0, 5, f"MIX DE VENTAS: {pct_efectivo:.1f}% Efectivo vs {pct_digital:.1f}% Digital", ln=1)
+    pdf.ln(1)
+    
+    x_start = pdf.get_x()
+    y_start = pdf.get_y()
+    
+    # Barra fondo (Gris - Digital)
+    pdf.set_fill_color(200, 200, 200) # Gris claro
+    pdf.rect(x_start, y_start, 180, 8, 'F') 
+    
+    # Barra frente (Azul oscuro - Efectivo)
+    ancho_efectivo = (pct_efectivo / 100) * 180
+    pdf.set_fill_color(50, 50, 100) # Azul corporativo
+    pdf.rect(x_start, y_start, ancho_efectivo, 8, 'F')
+    
+    # Leyenda debajo de la barra
+    pdf.set_xy(x_start, y_start + 10)
+    pdf.set_font("Arial", 'I', 8)
+    pdf.cell(90, 4, "Azul: Efectivo", align='L')
+    pdf.cell(90, 4, "Gris: Digital", align='R', ln=1)
+
+    # OTROS KPIs
+    pdf.ln(3)
+    pdf.set_font("Arial", 'B', 9)
+    pdf.cell(50, 6, "RATIO DE SALIDAS:", border=1)
+    pdf.set_font("Arial", '', 9)
+    pdf.cell(40, 6, f"{ratio_gastos:.1f}% de la venta", border=1)
+    pdf.cell(0, 6, " (Porcentaje del ingreso que se fue en gastos/pagos)", ln=1)
+    
+    # ==========================================
+    # RESULTADO FINAL
+    # ==========================================
+    pdf.ln(5)
     estado, color_texto = ("FALTANTE", (200, 0, 0)) if diferencia > 0 else ("SOBRANTE", (0, 100, 0))
     if diferencia == 0: estado, color_texto = ("OK", (0, 0, 0))
+    
     pdf.set_font("Arial", 'B', 16); pdf.set_text_color(*color_texto)
     pdf.cell(0, 14, f"CAJA REAL: $ {diferencia:,.2f} ({estado})", ln=1, align='C', border=1); pdf.set_text_color(0, 0, 0)
+    
     pdf.ln(5); pdf.set_font("Arial", 'B', 9); pdf.cell(0, 5, "OBSERVACIONES:", ln=1)
     return pdf.output(dest="S").encode("latin-1")
 
@@ -212,7 +261,7 @@ def input_tabla(titulo, key, solo_monto=False):
 # --- FORMULARIO ---
 st.title("Estancia San Francisco")
 
-# 1. FECHA (Caja anterior eliminada)
+# 1. FECHA
 col_enc1, col_enc2 = st.columns(2)
 with col_enc1: fecha_input = st.date_input("Fecha", datetime.today())
 with col_enc2: cajero = st.selectbox("Cajero de Turno", ["Santiago", "Leandro", "Natalia"])
@@ -243,7 +292,7 @@ with col_core1: registradora_total = st.number_input("Registradora (Z)", 0.0, st
 with col_core2: balanza_total = st.number_input("Balanza", 0.0, step=100.0)
 with col_core3: st.markdown("**Efectivo (Lo que se lleva)**")
 
-# Calculadora de Billetes (Ahora representa el TOTAL A RETIRAR)
+# Calculadora de Billetes
 with st.expander("🧮 Calculadora de Billetes", expanded=True):
     cb1, cb2, cb3, cb4 = st.columns(4)
     with cb1: b_20000 = st.number_input("$20k", 0); b_500 = st.number_input("$500", 0)
@@ -253,7 +302,7 @@ with st.expander("🧮 Calculadora de Billetes", expanded=True):
     total_fisico = (b_20000*20000)+(b_10000*10000)+(b_2000*2000)+(b_1000*1000)+(b_500*500)+(b_200*200)+(b_100*100)+monedas
 
 st.info(f"💵 Efectivo (Ventas): ${total_fisico:,.2f}")
-efectivo_neto = total_fisico # Ya no se resta nada
+efectivo_neto = total_fisico
 
 st.markdown("---")
 
@@ -278,7 +327,7 @@ st.markdown("**Pago a Proveedores**")
 columnas_proveedores = {
     "Proveedor": st.column_config.SelectboxColumn("Proveedor", options=lista_proveedores, required=True, width="medium"),
     "Forma Pago": st.column_config.SelectboxColumn("Método", options=["Efectivo", "Digital / Banco"], required=True, width="small"),
-    "Nro Factura": st.column_config.TextColumn("Nro Factura", width="medium"), # Ahora es siempre visible
+    "Nro Factura": st.column_config.TextColumn("Nro Factura", width="medium"), 
     "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0)
 }
 df_proveedores = st.data_editor(st.session_state.df_proveedores, column_config=columnas_proveedores, num_rows="dynamic", use_container_width=True, key="ed_proveedores")
@@ -296,20 +345,7 @@ st.caption(f"Total Salidas Varios: ${total_salidas:,.2f}")
 st.markdown("---")
 
 # 10. RESULTADO
-# Ya no hay "Queda para mañana" porque el dueño separa eso fisicamente.
-# Solo mostramos el resultado
 st.markdown("### Resultado del Cierre")
-
-# NUEVO: CÁLCULO DE PORCENTAJES Y MIX DE VENTAS
-total_venta_bruta = efectivo_neto + total_digital
-if total_venta_bruta > 0:
-    pct_efectivo = (efectivo_neto / total_venta_bruta) * 100
-    pct_digital = (total_digital / total_venta_bruta) * 100
-    
-    st.caption(f"📊 Mix de Ventas: Efectivo {pct_efectivo:.1f}% vs Digital {pct_digital:.1f}%")
-    st.progress(int(pct_efectivo), text="Porcentaje en Efectivo (Azul) vs Digital (Gris)")
-else:
-    st.caption("📊 Sin ventas registradas aún.")
 
 # CÁLCULOS FINALES
 total_gastos_fisicos = total_salidas + total_prov_efectivo
