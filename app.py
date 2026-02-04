@@ -139,7 +139,7 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
         pdf.ln(2) 
 
     dibujar_kpi("1. BALANZA", balanza)
-    dibujar_kpi("2. EFECTIVO (Retiro)", efectivo_neto) # Aclaramos que es lo que se lleva
+    dibujar_kpi("2. EFECTIVO", efectivo_neto) # Aclaramos que es lo que se lleva
     dibujar_kpi("3. DIGITAL", total_digital)
     
     pdf.ln(2); pdf.set_font("Arial", '', 10)
@@ -243,7 +243,7 @@ st.markdown("---")
 col_core1, col_core2, col_core3 = st.columns(3)
 with col_core1: registradora_total = st.number_input("Registradora (Z)", 0.0, step=100.0)
 with col_core2: balanza_total = st.number_input("Balanza", 0.0, step=100.0)
-with col_core3: st.markdown("**Efectivo (Lo que se lleva)**")
+with col_core3: st.markdown("**Efectivo**")
 
 # Calculadora de Billetes (Ahora representa el TOTAL A RETIRAR)
 with st.expander("Calculadora de Billetes", expanded=True):
@@ -254,7 +254,7 @@ with st.expander("Calculadora de Billetes", expanded=True):
     with cb4: b_1000 = st.number_input("$1k", 0); monedas = st.number_input("Mon", 0.0)
     total_fisico = (b_20000*20000)+(b_10000*10000)+(b_2000*2000)+(b_1000*1000)+(b_500*500)+(b_200*200)+(b_100*100)+monedas
 
-st.info(f"💵 Efectivo (Ventas): ${total_fisico:,.2f}")
+st.info(f"💵 Efectivo: ${total_fisico:,.2f}")
 efectivo_neto = total_fisico # Ya no se resta nada
 
 st.markdown("---")
