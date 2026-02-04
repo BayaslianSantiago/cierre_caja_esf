@@ -8,6 +8,21 @@ from streamlit_gsheets import GSheetsConnection
 # --- 1. CONFIGURACIÓN Y LOGIN ---
 st.set_page_config(page_title="Cierre de Caja", layout="centered")
 
+import streamlit.components.v1 as components
+
+# 🛡️ ESCUDO ANTI-CIERRE ACCIDENTAL
+# Esto inyecta un script que pregunta "¿Seguro?" si intentan cerrar la pestaña
+js_warning = """
+<script>
+    window.addEventListener("beforeunload", function (e) {
+        var confirmationMessage = 'Es posible que los cambios no se guarden.';
+        (e || window.event).returnValue = confirmationMessage; 
+        return confirmationMessage;
+    });
+</script>
+"""
+components.html(js_warning, height=0)
+
 hide_st_style = """
             <style>
             #MainMenu {visibility: hidden;}
