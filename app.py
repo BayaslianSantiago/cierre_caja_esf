@@ -6,219 +6,396 @@ import os
 from streamlit_gsheets import GSheetsConnection
 import streamlit.components.v1 as components
 
-# ─────────────────────────────────────────────
-# 1. CONFIGURACIÓN PÁGINA
-# ─────────────────────────────────────────────
+# --- 1. CONFIGURACIÓN Y LOGIN ---
 st.set_page_config(
-    page_title="Cierre de Caja · Estancia San Francisco",
-    page_icon="🧀",
-    layout="centered"
+    page_title="Cierre de Caja - Estancia San Francisco",
+    layout="wide",
+    page_icon="🏡"
 )
 
-# ─── ESCUDO ANTI-CIERRE ACCIDENTAL ───────────
+# ESCUDO ANTI-CIERRE ACCIDENTAL
 js_warning = """
 <script>
     window.addEventListener("beforeunload", function (e) {
-        var msg = 'Es posible que los cambios no se guarden.';
-        (e || window.event).returnValue = msg;
-        return msg;
+        var confirmationMessage = 'Es posible que los cambios no se guarden.';
+        (e || window.event).returnValue = confirmationMessage;
+        return confirmationMessage;
     });
 </script>
 """
 components.html(js_warning, height=0)
 
-# ─────────────────────────────────────────────
-# 2. ESTILOS — PALETA ESTANCIA SAN FRANCISCO
-#    Verde botella  #2D4A2D  (primario)
-#    Crema/beige    #F5EDD8  (fondo)
-#    Dorado         #B8942A  (acento)
-#    Marrón oscuro  #3E2A1A  (texto fuerte)
-#    Verde claro    #4A7C4A  (hover / secundario)
-# ─────────────────────────────────────────────
+# =============================================
+# ESTILO VISUAL - ESTANCIA SAN FRANCISCO
+# Paleta: Verde oscuro + Dorado + Crema/Marfil
+# Tipografía: Serif elegante (Playfair Display)
+# Estética: Artesanal premium / campo / delicatessen
+# =============================================
 esf_style = """
 <style>
-/* ── FUENTES ── */
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Lato:wght@400;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Lato:wght@300;400;600&display=swap');
 
-/* ── VARIABLES ── */
 :root {
-    --verde:    #2D4A2D;
-    --verde2:   #4A7C4A;
-    --crema:    #F5EDD8;
-    --dorado:   #B8942A;
-    --marron:   #3E2A1A;
-    --gris:     #EDEDED;
-    --blanco:   #FFFFFF;
-    --texto:    #2C2C2C;
+    --verde-oscuro:    #1A3A2A;
+    --verde-medio:     #2C5F3E;
+    --verde-claro:     #3D7A52;
+    --dorado:          #C8993A;
+    --dorado-claro:    #E8B85A;
+    --crema:           #F5EDD8;
+    --crema-oscuro:    #EAD9B8;
+    --marfil:          #FAF6EE;
+    --texto-oscuro:    #1A1A1A;
+    --texto-medio:     #3D3D3D;
+    --texto-suave:     #7A7060;
+    --rojo-error:      #8B2020;
+    --verde-ok:        #1A5C2A;
 }
 
-/* ── OCULTAR CHROME DE STREAMLIT ── */
+/* ── RESET GENERAL ── */
 #MainMenu {visibility: hidden;}
-footer    {visibility: hidden;}
-header    {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
 
-/* ── FONDO Y CONTENEDOR ── */
 .stApp {
-    background-color: var(--crema) !important;
+    background-color: var(--marfil);
     font-family: 'Lato', sans-serif;
-}
-.block-container {
-    padding: 2rem 2.5rem 3rem 2.5rem !important;
-    max-width: 1050px;
+    color: var(--texto-oscuro);
 }
 
-/* ── TÍTULOS ── */
-h1, h2, h3 {
-    font-family: 'Playfair Display', serif !important;
-    color: var(--verde) !important;
+.block-container {
+    padding-top: 0 !important;
+    padding-bottom: 3rem !important;
+    max-width: 1200px;
+}
+
+/* ── HEADER PRINCIPAL ── */
+.esf-header {
+    background: linear-gradient(135deg, var(--verde-oscuro) 0%, var(--verde-medio) 70%, var(--verde-claro) 100%);
+    padding: 2rem 3rem;
+    margin: -1rem -1rem 2rem -1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 4px solid var(--dorado);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+}
+
+.esf-header-left {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.esf-escudo {
+    width: 64px;
+    height: 64px;
+    background: var(--dorado);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    flex-shrink: 0;
+}
+
+.esf-titulo {
+    font-family: 'Playfair Display', serif;
+    color: var(--crema) !important;
+    font-size: 1.9rem !important;
+    font-weight: 700 !important;
+    margin: 0 !important;
+    line-height: 1.1;
+    letter-spacing: 0.5px;
+}
+
+.esf-subtitulo {
+    color: var(--dorado-claro);
+    font-size: 0.85rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-top: 0.2rem;
+    font-weight: 300;
+}
+
+.esf-fecha-badge {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid var(--dorado);
+    border-radius: 6px;
+    padding: 0.6rem 1.2rem;
+    color: var(--crema);
+    font-family: 'Playfair Display', serif;
+    font-size: 0.95rem;
+    text-align: right;
+}
+
+.esf-fecha-badge span {
+    display: block;
+    color: var(--dorado-claro);
+    font-size: 0.7rem;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    font-family: 'Lato', sans-serif;
+    font-weight: 300;
+}
+
+/* ── SECCIONES ── */
+.esf-seccion {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: var(--verde-oscuro);
+    color: var(--crema);
+    padding: 0.6rem 1.2rem;
+    border-radius: 6px;
+    margin: 1.8rem 0 0.8rem 0;
+    font-family: 'Playfair Display', serif;
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    border-left: 4px solid var(--dorado);
+    box-shadow: 0 2px 8px rgba(26,58,42,0.2);
+}
+
+.esf-seccion-icono {
+    font-size: 1.1rem;
+}
+
+/* ── PANEL RESULTADO ── */
+.esf-resultado-panel {
+    background: var(--verde-oscuro);
+    border: 2px solid var(--dorado);
+    border-radius: 10px;
+    padding: 2rem;
+    margin: 1.5rem 0;
+    box-shadow: 0 6px 24px rgba(26,58,42,0.3);
+}
+
+.esf-resultado-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.esf-kpi {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(200,153,58,0.3);
+    border-radius: 8px;
+    padding: 1rem;
+    text-align: center;
+}
+
+.esf-kpi-label {
+    color: var(--dorado-claro);
+    font-size: 0.7rem;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 0.4rem;
+}
+
+.esf-kpi-valor {
+    color: var(--crema);
+    font-family: 'Playfair Display', serif;
+    font-size: 1.4rem;
+    font-weight: 700;
+}
+
+.esf-diferencia {
+    text-align: center;
+    padding: 1.2rem;
+    border-radius: 8px;
+    font-family: 'Playfair Display', serif;
+    font-size: 1.8rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.esf-diferencia.ok {
+    background: rgba(26,92,42,0.4);
+    border: 2px solid #4CAF50;
+    color: #81C784;
+}
+
+.esf-diferencia.faltante {
+    background: rgba(139,32,32,0.4);
+    border: 2px solid #EF5350;
+    color: #EF9A9A;
+}
+
+.esf-diferencia.sobrante {
+    background: rgba(26,58,42,0.6);
+    border: 2px solid var(--dorado);
+    color: var(--dorado-claro);
 }
 
 /* ── INPUTS ── */
-input[type="number"], input[type="text"], .stTextInput input {
-    border: 1px solid #ccc !important;
-    border-radius: 4px !important;
-    background-color: var(--blanco) !important;
-}
-input:focus {
-    border-color: var(--dorado) !important;
-    box-shadow: 0 0 0 2px rgba(184,148,42,0.2) !important;
+.stNumberInput input,
+.stTextInput input,
+.stSelectbox > div > div {
+    border-radius: 5px !important;
+    border-color: var(--crema-oscuro) !important;
+    background: white !important;
 }
 
-/* ── SELECTBOX ── */
-.stSelectbox > div > div {
-    border-radius: 4px !important;
-    border-color: #ccc !important;
+.stNumberInput input:focus,
+.stTextInput input:focus {
+    border-color: var(--verde-medio) !important;
+    box-shadow: 0 0 0 2px rgba(44,95,62,0.2) !important;
 }
 
 /* ── DATA EDITOR ── */
-.stDataFrame, [data-testid="stDataEditor"] {
-    background-color: var(--blanco) !important;
-    border-radius: 6px !important;
-    border: 1px solid #ddd !important;
+.stDataFrame,
+.stDataEditor {
+    border: 1px solid var(--crema-oscuro);
+    border-radius: 6px;
+    overflow: hidden;
 }
 
-/* ── BOTONES PRIMARIOS ── */
+/* ── BOTONES ── */
 .stButton > button {
-    background-color: var(--verde) !important;
+    background: var(--verde-oscuro) !important;
     color: var(--crema) !important;
-    border: none !important;
+    border: 1px solid var(--dorado) !important;
     border-radius: 5px !important;
     font-family: 'Lato', sans-serif !important;
     font-weight: 600 !important;
-    font-size: 0.95rem !important;
-    letter-spacing: 0.5px !important;
-    padding: 0.55rem 1.2rem !important;
-    transition: all 0.2s !important;
-}
-.stButton > button:hover {
-    background-color: var(--verde2) !important;
-    color: var(--blanco) !important;
-    box-shadow: 0 3px 8px rgba(0,0,0,0.2) !important;
+    letter-spacing: 0.8px !important;
+    padding: 0.55rem 1.5rem !important;
+    transition: all 0.2s ease !important;
+    text-transform: uppercase !important;
+    font-size: 0.82rem !important;
 }
 
-/* ── BOTÓN DOWNLOAD ── */
+.stButton > button:hover {
+    background: var(--verde-medio) !important;
+    border-color: var(--dorado-claro) !important;
+    box-shadow: 0 3px 12px rgba(26,58,42,0.3) !important;
+    transform: translateY(-1px) !important;
+}
+
+/* Botón de descarga */
 .stDownloadButton > button {
-    background-color: var(--dorado) !important;
-    color: var(--blanco) !important;
+    background: var(--dorado) !important;
+    color: var(--verde-oscuro) !important;
     border: none !important;
     border-radius: 5px !important;
-    font-weight: 600 !important;
-}
-.stDownloadButton > button:hover {
-    background-color: #9a7a22 !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.8px !important;
+    text-transform: uppercase !important;
+    font-size: 0.82rem !important;
 }
 
-/* ── MÉTRICAS ── */
-[data-testid="metric-container"] {
-    background-color: var(--blanco);
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    padding: 0.8rem 1rem;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-}
-[data-testid="metric-container"] label {
-    color: var(--verde) !important;
-    font-weight: 600 !important;
-    font-size: 0.8rem !important;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+.stDownloadButton > button:hover {
+    background: var(--dorado-claro) !important;
+    transform: translateY(-1px) !important;
 }
 
 /* ── EXPANDER ── */
 .stExpander {
-    background-color: var(--blanco) !important;
-    border: 1px solid #ddd !important;
+    border: 1px solid var(--crema-oscuro) !important;
     border-radius: 6px !important;
+    background: white;
 }
 
-/* ── CAPTIONS ── */
-.stCaption { color: #777 !important; font-style: italic; }
+.stExpander > div > div > div > div {
+    color: var(--verde-oscuro) !important;
+    font-weight: 600;
+}
+
+/* ── MÉTRICAS ── */
+[data-testid="metric-container"] {
+    background: white;
+    border: 1px solid var(--crema-oscuro);
+    border-radius: 8px;
+    padding: 0.8rem 1rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+
+[data-testid="metric-container"] label {
+    color: var(--texto-suave) !important;
+    font-size: 0.75rem !important;
+    letter-spacing: 1px !important;
+    text-transform: uppercase !important;
+}
+
+[data-testid="metric-container"] [data-testid="metric-value"] {
+    color: var(--verde-oscuro) !important;
+    font-family: 'Playfair Display', serif !important;
+    font-size: 1.4rem !important;
+}
+
+/* ── SELECTBOX / INPUTS LABELS ── */
+label {
+    color: var(--texto-medio) !important;
+    font-weight: 600 !important;
+    font-size: 0.85rem !important;
+    letter-spacing: 0.3px;
+}
+
+/* ── CAPTION ── */
+.stCaption {
+    color: var(--texto-suave) !important;
+    font-style: italic;
+}
 
 /* ── ALERTS ── */
-.stSuccess { border-left: 4px solid var(--verde2) !important; }
-.stError   { border-left: 4px solid #C0392B !important; }
+.stSuccess {
+    background: rgba(26,92,42,0.1) !important;
+    border-color: var(--verde-claro) !important;
+}
+
+.stError {
+    background: rgba(139,32,32,0.1) !important;
+}
+
+/* ── DIVISOR DECORATIVO ── */
+.esf-divider {
+    border: none;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--dorado), transparent);
+    margin: 1.5rem 0;
+}
+
+/* ── LOGIN PAGE ── */
+.esf-login-container {
+    max-width: 420px;
+    margin: 4rem auto;
+    background: white;
+    border-radius: 12px;
+    padding: 3rem 2.5rem;
+    border: 1px solid var(--crema-oscuro);
+    box-shadow: 0 8px 32px rgba(26,58,42,0.12);
+    text-align: center;
+}
+
+.esf-login-escudo {
+    font-size: 3.5rem;
+    margin-bottom: 1rem;
+}
+
+.esf-login-titulo {
+    font-family: 'Playfair Display', serif;
+    color: var(--verde-oscuro);
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin-bottom: 0.3rem;
+}
+
+.esf-login-sub {
+    color: var(--texto-suave);
+    font-size: 0.85rem;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 2rem;
+}
 </style>
 """
 st.markdown(esf_style, unsafe_allow_html=True)
 
 
-# ─────────────────────────────────────────────
-# 3. HELPERS DE UI
-# ─────────────────────────────────────────────
-def encabezado_seccion(titulo: str, icono: str = ""):
-    """Banda verde con título de sección."""
-    st.markdown(f"""
-        <div style='
-            background: linear-gradient(90deg, #2D4A2D 0%, #4A7C4A 100%);
-            color: #F5EDD8;
-            padding: 0.55rem 1rem;
-            border-radius: 5px;
-            margin: 1.8rem 0 0.8rem 0;
-            font-family: "Lato", sans-serif;
-            font-weight: 700;
-            font-size: 0.9rem;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-        '>{icono}&nbsp; {titulo}</div>
-    """, unsafe_allow_html=True)
-
-def linea_dorada():
-    st.markdown("""
-        <hr style='border:none; border-top: 2px solid #B8942A; margin: 1.5rem 0;'>
-    """, unsafe_allow_html=True)
-
-def panel_resultado(diferencia: float):
-    """Panel grande de cierre con color dinámico."""
-    if diferencia == 0:
-        color, estado, icono = "#2D4A2D", "CAJA CUADRADA", "✅"
-    elif diferencia > 0:
-        color, estado, icono = "#8B2020", "FALTANTE", "⚠️"
-    else:
-        color, estado, icono = "#1A5C1A", "SOBRANTE", "ℹ️"
-
-    st.markdown(f"""
-        <div style='
-            background-color: {color};
-            color: #F5EDD8;
-            text-align: center;
-            padding: 1.6rem 2rem;
-            border-radius: 8px;
-            font-family: "Playfair Display", serif;
-            font-size: 1.9rem;
-            font-weight: 700;
-            letter-spacing: 1px;
-            box-shadow: 0 4px 14px rgba(0,0,0,0.18);
-            margin: 1rem 0;
-            border: 3px solid #B8942A;
-        '>
-            {icono} &nbsp; ${abs(diferencia):,.2f} &nbsp;·&nbsp; {estado}
-        </div>
-    """, unsafe_allow_html=True)
-
-
-# ─────────────────────────────────────────────
-# 4. LOGIN
-# ─────────────────────────────────────────────
+# ── SISTEMA DE LOGIN ──────────────────────────────────────────────
 def check_password():
     def password_entered():
         if st.session_state["password"] == st.secrets["general"]["password"]:
@@ -230,26 +407,19 @@ def check_password():
     if st.session_state.get("password_correct", False):
         return True
 
-    # Encabezado de login
     st.markdown("""
-        <div style='text-align:center; margin-bottom: 2rem;'>
-            <h1 style='font-family:"Playfair Display",serif; color:#2D4A2D; font-size:2.2rem;'>
-                Estancia San Francisco
-            </h1>
-            <p style='color:#777; font-size:0.95rem;'>Sistema de Cierre de Caja · Acceso Restringido</p>
-            <hr style='border:none; border-top: 2px solid #B8942A; width:60%; margin:1rem auto;'>
+        <div class="esf-login-container">
+            <div class="esf-login-escudo">🏡</div>
+            <div class="esf-login-titulo">Estancia San Francisco</div>
+            <div class="esf-login-sub">Sistema de Cierre de Caja</div>
         </div>
     """, unsafe_allow_html=True)
 
-    col_a, col_b, col_c = st.columns([1, 2, 1])
-    with col_b:
-        st.text_input(
-            "Contraseña del local",
-            type="password",
-            on_change=password_entered,
-            key="password",
-            placeholder="Ingresá la contraseña..."
-        )
+    col_c, col_inp, col_d = st.columns([1, 2, 1])
+    with col_inp:
+        st.text_input("Contraseña de acceso", type="password",
+                      on_change=password_entered, key="password",
+                      placeholder="Ingresá la contraseña...")
         if "password_correct" in st.session_state and not st.session_state["password_correct"]:
             st.error("Contraseña incorrecta. Intentá de nuevo.")
     return False
@@ -258,22 +428,19 @@ if not check_password():
     st.stop()
 
 
-# ─────────────────────────────────────────────
-# 5. CONEXIÓN GOOGLE SHEETS
-# ─────────────────────────────────────────────
+# ── CONEXIÓN GOOGLE SHEETS ────────────────────────────────────────
 conn = None
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
 except Exception as e:
-    st.warning(f"Sin conexión a Google Sheets: {e}")
+    st.error(f"Error de conexión con Google Sheets: {e}")
 
-# ─────────────────────────────────────────────
-# 6. DATOS MAESTROS
-# ─────────────────────────────────────────────
+
+# ── DATOS MAESTROS ────────────────────────────────────────────────
 lista_proveedores = ["Pan Rustico", "Pan Fresh", "Dharma", "ValMaira",
                      "Aprea", "CocaCola", "Grenn&Co", "Basile Walter", "Otro"]
-lista_empleados   = ["Santiago", "Julieta", "Mariela", "Fernanda",
-                     "Brian", "Erika", "Oriana"]
+lista_empleados = ["Santiago", "Julieta", "Mariela", "Fernanda",
+                   "Brian", "Erika", "Oriana"]
 
 if conn is not None:
     try:
@@ -283,88 +450,87 @@ if conn is not None:
             if "Otro" not in lista_proveedores:
                 lista_proveedores.append("Otro")
     except Exception as e:
-        st.caption(f"No se pudo cargar el directorio: {e}")
+        st.warning(f"No se pudo cargar el directorio de proveedores: {e}")
 
-# ─────────────────────────────────────────────
-# 7. ESTADO DE SESIÓN
-# ─────────────────────────────────────────────
+
+# ── VARIABLES DE SESIÓN ───────────────────────────────────────────
 session_keys = {
-    'df_salidas':       ["Descripción", "Monto"],
-    'df_transferencias':["Monto"],
-    'df_vales':         ["Descripción", "Monto"],
-    'df_proveedores':   ["Proveedor", "Forma Pago", "Nro Factura", "Monto"],
-    'df_empleados':     ["Empleado", "Monto"],
+    'df_salidas':        ["Descripción", "Monto"],
+    'df_transferencias': ["Monto"],
+    'df_vales':          ["Descripción", "Monto"],
+    'df_proveedores':    ["Proveedor", "Forma Pago", "Nro Factura", "Monto"],
+    'df_empleados':      ["Empleado", "Monto"],
 }
 for key, cols in session_keys.items():
     if key not in st.session_state:
         st.session_state[key] = pd.DataFrame(columns=cols)
 
 
-# ─────────────────────────────────────────────
-# 8. FUNCIONES DE GUARDADO
-# ─────────────────────────────────────────────
+# ── FUNCIONES GUARDADO ────────────────────────────────────────────
 def guardar_historial(datos_cierre):
-    df = conn.read(worksheet="Historial")
-    df_upd = pd.concat([df, pd.DataFrame([datos_cierre])], ignore_index=True).fillna("")
+    df_historial = conn.read(worksheet="Historial")
+    fila = pd.DataFrame([datos_cierre])
+    df_upd = pd.concat([df_historial, fila], ignore_index=True).fillna("")
     conn.update(worksheet="Historial", data=df_upd)
 
-def guardar_proveedores(df_provs, fecha, cajero):
+def guardar_proveedores(df_provs, datos_cierre):
     pagos = df_provs[df_provs["Monto"] > 0].copy()
     if pagos.empty:
         return
-    pagos["Fecha"]  = fecha
-    pagos["Cajero"] = cajero
+    pagos["Fecha"] = datos_cierre["Fecha"]
+    pagos["Cajero"] = datos_cierre["Cajero"]
     df_ant = conn.read(worksheet="Pagos_Proveedores")
-    conn.update(worksheet="Pagos_Proveedores",
-                data=pd.concat([df_ant, pagos], ignore_index=True).fillna(""))
+    df_upd = pd.concat([df_ant, pagos], ignore_index=True).fillna("")
+    conn.update(worksheet="Pagos_Proveedores", data=df_upd)
 
-def guardar_empleados(df_empls, fecha):
+def guardar_empleados(df_empls, datos_cierre):
     consumos = df_empls[df_empls["Monto"] > 0].copy()
     if consumos.empty:
         return
-    consumos["Fecha"] = fecha
+    consumos["Fecha"] = datos_cierre["Fecha"]
     consumos = consumos[["Fecha", "Empleado", "Monto"]]
     df_ant = conn.read(worksheet="Consumo_Empleados")
-    conn.update(worksheet="Consumo_Empleados",
-                data=pd.concat([df_ant, consumos], ignore_index=True).fillna(""))
+    df_upd = pd.concat([df_ant, consumos], ignore_index=True).fillna("")
+    conn.update(worksheet="Consumo_Empleados", data=df_upd)
 
 def guardar_todo_en_nube(datos_cierre, df_provs, df_empls):
     try:
         guardar_historial(datos_cierre)
-        guardar_proveedores(df_provs, datos_cierre["Fecha"], datos_cierre["Cajero"])
-        guardar_empleados(df_empls, datos_cierre["Fecha"])
+        guardar_proveedores(df_provs, datos_cierre)
+        guardar_empleados(df_empls, datos_cierre)
         return True
     except Exception as e:
-        st.error(f"Error guardando en nube: {e}")
+        st.error(f"Error al guardar en la nube: {e}")
         return False
 
 
-# ─────────────────────────────────────────────
-# 9. FUNCIÓN PDF
-# ─────────────────────────────────────────────
+# ── FUNCIÓN PDF ───────────────────────────────────────────────────
 def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
-                             efectivo_neto, df_salidas, df_transferencias,
-                             df_vales, df_proveedores, df_empleados,
-                             diferencia, desglose_digital):
+                            efectivo_neto, df_salidas, df_transferencias,
+                            df_vales, df_proveedores, df_empleados,
+                            diferencia, desglose_digital):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_margins(15, 15, 15)
 
-    # Logo
     if os.path.exists("logo.png"):
         try:
             pdf.image("logo.png", 15, 10, 30)
         except Exception:
             pass
 
-    dias_semana = ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"]
+    dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
     fecha_texto = f"{dias_semana[fecha.weekday()]} {fecha.strftime('%d/%m/%Y')}"
 
-    pdf.set_xy(50, 12); pdf.set_font("Arial", 'B', 18)
+    # Encabezado
+    pdf.set_xy(50, 12)
+    pdf.set_font("Arial", 'B', 18)
     pdf.cell(0, 10, "ESTANCIA SAN FRANCISCO", ln=1)
-    pdf.set_xy(50, 20); pdf.set_font("Arial", '', 12)
+    pdf.set_xy(50, 20)
+    pdf.set_font("Arial", '', 12)
     pdf.cell(0, 8, "Reporte de Cierre de Caja", ln=1)
-    pdf.set_xy(130, 12); pdf.set_font("Arial", 'B', 10)
+    pdf.set_xy(130, 12)
+    pdf.set_font("Arial", 'B', 10)
     pdf.cell(60, 6, f"FECHA: {fecha_texto}", ln=1, align='R')
     pdf.set_x(130)
     pdf.cell(60, 6, f"CAJERO: {cajero}", ln=1, align='R')
@@ -372,22 +538,20 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
     pdf.line(15, pdf.get_y(), 195, pdf.get_y())
     pdf.ln(3)
 
-    # KPIs
     def dibujar_kpi(titulo, monto):
         pdf.set_fill_color(240, 240, 240)
         pdf.set_font("Arial", 'B', 12)
         pdf.cell(0, 10, f"{titulo}: $ {monto:,.2f}", ln=1, align='C', fill=True, border=1)
         pdf.ln(2)
 
-    dibujar_kpi("1. BALANZA",   balanza)
-    dibujar_kpi("2. EFECTIVO",  efectivo_neto)
-    dibujar_kpi("3. DIGITAL",   total_digital)
+    dibujar_kpi("1. BALANZA", balanza)
+    dibujar_kpi("2. EFECTIVO", efectivo_neto)
+    dibujar_kpi("3. DIGITAL", total_digital)
     pdf.ln(2)
     pdf.set_font("Arial", '', 10)
     pdf.cell(0, 6, f"Ticket Fiscal (Z): $ {registradora:,.2f}", border=0, align='C', ln=1)
     pdf.ln(5)
 
-    # Tablas
     def dibujar_tabla(titulo, df, label_fijo=None):
         if df.empty or df['Monto'].sum() == 0:
             return
@@ -402,19 +566,18 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
                 pdf.cell(40, 5, f"$ {row['Monto']:,.2f}", align='R', ln=1)
         pdf.ln(2)
 
-    dibujar_tabla("MERCADERÍA EMPLEADOS",       df_empleados)
+    dibujar_tabla("MERCADERÍA EMPLEADOS", df_empleados)
     dibujar_tabla("TRANSFERENCIAS (Entrantes)", df_transferencias, label_fijo="Transferencia")
-    dibujar_tabla("GASTOS VARIOS / SALIDAS",    df_salidas)
-    dibujar_tabla("VALES / FIADOS",             df_vales)
+    dibujar_tabla("GASTOS VARIOS / SALIDAS", df_salidas)
+    dibujar_tabla("VALES / FIADOS", df_vales)
 
-    # Resultado
     pdf.ln(5)
-    if diferencia == 0:
-        estado, color_texto = "OK",       (0, 0, 0)
-    elif diferencia > 0:
+    if diferencia > 0:
         estado, color_texto = "FALTANTE", (200, 0, 0)
-    else:
+    elif diferencia < 0:
         estado, color_texto = "SOBRANTE", (0, 100, 0)
+    else:
+        estado, color_texto = "OK ✓", (0, 0, 0)
 
     pdf.set_font("Arial", 'B', 16)
     pdf.set_text_color(*color_texto)
@@ -423,11 +586,20 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
     return pdf.output(dest="S").encode("latin-1")
 
 
-# ─────────────────────────────────────────────
-# 10. HELPER TABLAS EDITABLES
-# ─────────────────────────────────────────────
+# ── HELPERS UI ────────────────────────────────────────────────────
+def seccion(titulo, icono=""):
+    st.markdown(f"""
+        <div class="esf-seccion">
+            <span class="esf-seccion-icono">{icono}</span>
+            {titulo}
+        </div>
+    """, unsafe_allow_html=True)
+
+def divider():
+    st.markdown('<hr class="esf-divider">', unsafe_allow_html=True)
+
 def input_tabla(titulo, key, solo_monto=False):
-    cfg = {"Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0)}
+    cfg = {"Monto": st.column_config.NumberColumn("($)", format="$%d", min_value=0)}
     if not solo_monto:
         cfg["Descripción"] = st.column_config.TextColumn("Detalle", required=True)
     df = st.data_editor(
@@ -438,191 +610,242 @@ def input_tabla(titulo, key, solo_monto=False):
         key=f"ed_{key}"
     )
     total = df["Monto"].sum() if not df.empty else 0.0
-    st.caption(f"Subtotal: ${total:,.2f}")
+    st.caption(f"Subtotal: **${total:,.2f}**")
     return df, total
 
 
-# ═════════════════════════════════════════════
-#  ENCABEZADO PRINCIPAL
-# ═════════════════════════════════════════════
-col_logo, col_titulo = st.columns([1, 5])
-with col_logo:
-    if os.path.exists("logo.png"):
-        st.image("logo.png", width=75)
-    else:
-        st.markdown("""
-            <div style='
-                width:65px; height:65px;
-                background:#2D4A2D;
-                border-radius:50%;
-                border: 3px solid #B8942A;
-                display:flex; align-items:center; justify-content:center;
-                font-size:1.8rem;
-            '>🧀</div>
-        """, unsafe_allow_html=True)
-with col_titulo:
-    st.markdown("""
-        <h1 style='margin-bottom:0; font-size:1.9rem;'>Estancia San Francisco</h1>
-        <p style='color:#777; margin-top:0.1rem; font-size:0.9rem; font-family:Lato,sans-serif;'>
-            Sistema de Cierre de Caja
-        </p>
-    """, unsafe_allow_html=True)
+# ════════════════════════════════════════════════════════
+#  INTERFAZ PRINCIPAL
+# ════════════════════════════════════════════════════════
 
-linea_dorada()
+# ── HEADER ───────────────────────────────────────────────────────
+hoy = datetime.today()
+dias_es = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+dia_texto = f"{dias_es[hoy.weekday()]}, {hoy.strftime('%d/%m/%Y')}"
 
-# ═════════════════════════════════════════════
-#  SECCIÓN 1 — DATOS DEL TURNO
-# ═════════════════════════════════════════════
-encabezado_seccion("Datos del Turno", "📋")
-col_enc1, col_enc2 = st.columns(2)
+st.markdown(f"""
+    <div class="esf-header">
+        <div class="esf-header-left">
+            <div class="esf-escudo">🏡</div>
+            <div>
+                <div class="esf-titulo">Estancia San Francisco</div>
+                <div class="esf-subtitulo">Sistema de Cierre de Caja</div>
+            </div>
+        </div>
+        <div class="esf-fecha-badge">
+            <span>Fecha del sistema</span>
+            {dia_texto}
+        </div>
+    </div>
+""", unsafe_allow_html=True)
+
+
+# ── SECCIÓN 1: DATOS DEL TURNO ────────────────────────────────────
+seccion("Datos del Turno", "📋")
+col_enc1, col_enc2, col_enc3 = st.columns([2, 2, 3])
 with col_enc1:
-    fecha_input = st.date_input("Fecha del cierre", datetime.today())
+    fecha_input = st.date_input("Fecha del Cierre", datetime.today())
 with col_enc2:
     cajero = st.selectbox("Cajero de Turno", lista_empleados)
+with col_enc3:
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.caption(f"Turno registrado el {hoy.strftime('%d/%m/%Y')} a las {hoy.strftime('%H:%M')} hs")
 
-# ═════════════════════════════════════════════
-#  SECCIÓN 2 — TOTALES DE VENTA
-# ═════════════════════════════════════════════
-encabezado_seccion("Totales de Venta", "💰")
-col_core1, col_core2 = st.columns(2)
-with col_core1:
-    balanza_total     = st.number_input("Total Balanza (Venta Real)", 0.0, step=100.0)
-    registradora_total = st.number_input("Registradora / Ticket Z",  0.0, step=100.0)
-with col_core2:
-    with st.expander("🧮 Calculadora de Billetes", expanded=False):
-        cols_bill = st.columns(2)
-        b20k = cols_bill[0].number_input("$20.000", 0, min_value=0)
-        b10k = cols_bill[1].number_input("$10.000", 0, min_value=0)
-        b5k  = cols_bill[0].number_input("$5.000",  0, min_value=0)
-        b2k  = cols_bill[1].number_input("$2.000",  0, min_value=0)
-        b1k  = cols_bill[0].number_input("$1.000",  0, min_value=0)
-        b500 = cols_bill[1].number_input("$500",    0, min_value=0)
-        b200 = cols_bill[0].number_input("$200",    0, min_value=0)
-        b100 = cols_bill[1].number_input("$100",    0, min_value=0)
-        total_fisico = (b20k*20000 + b10k*10000 + b5k*5000 +
-                        b2k*2000  + b1k*1000   + b500*500  +
-                        b200*200  + b100*100)
-        st.markdown(f"""
-            <div style='
-                background:#2D4A2D; color:#F5EDD8;
-                text-align:center; border-radius:5px;
-                padding:0.4rem; font-weight:700; margin-top:0.5rem;
-            '>Total: ${total_fisico:,.2f}</div>
-        """, unsafe_allow_html=True)
-    efectivo_neto = st.number_input("Efectivo Total en Caja", value=float(total_fisico), step=100.0)
+divider()
 
-# ─── Cobros Digitales ────────────────────────
-encabezado_seccion("Cobros Digitales", "💳")
-col_d1, col_d2 = st.columns(2)
-with col_d1:
-    mp     = st.number_input("Mercado Pago", 0.0, step=100.0)
-    clover = st.number_input("Clover",       0.0, step=100.0)
-with col_d2:
-    nave = st.number_input("Nave", 0.0, step=100.0)
-    bbva = st.number_input("BBVA", 0.0, step=100.0)
-total_digital = mp + nave + clover + bbva
-st.caption(f"Total digital: ${total_digital:,.2f}")
 
-# ═════════════════════════════════════════════
-#  SECCIÓN 3 — MOVIMIENTOS
-# ═════════════════════════════════════════════
-encabezado_seccion("Transferencias Entrantes", "🔄")
-df_transferencias, total_transf_in = input_tabla(
-    "Transferencias (Entrantes)", "df_transferencias", solo_monto=True
-)
+# ── SECCIÓN 2: MOVIMIENTOS ────────────────────────────────────────
+seccion("Movimientos de Caja", "💵")
 
-encabezado_seccion("Vales / Fiados", "📝")
-df_vales, total_vales = input_tabla("Vales / Fiados", "df_vales")
+col_mov1, col_mov2 = st.columns(2)
 
-encabezado_seccion("Gastos Varios (Salidas de Caja)", "🧾")
-df_salidas, total_salidas = input_tabla("Gastos Varios", "df_salidas")
+with col_mov1:
+    st.markdown("**Vales / Fiados**")
+    cfg_vales = {
+        "Monto": st.column_config.NumberColumn("($)", format="$%d", min_value=0),
+        "Descripción": st.column_config.TextColumn("Detalle", required=True)
+    }
+    df_vales = st.data_editor(st.session_state['df_vales'], column_config=cfg_vales,
+                               num_rows="dynamic", use_container_width=True, key="ed_df_vales")
+    total_vales = df_vales["Monto"].sum() if not df_vales.empty else 0.0
+    st.caption(f"Subtotal: **${total_vales:,.2f}**")
 
-# ─── Proveedores ─────────────────────────────
-encabezado_seccion("Pago a Proveedores", "📦")
-cfg_prov = {
-    "Proveedor":  st.column_config.SelectboxColumn("Proveedor",  options=lista_proveedores, required=True),
-    "Forma Pago": st.column_config.SelectboxColumn("Método",     options=["Efectivo", "Digital / Banco"], required=True),
-    "Nro Factura":st.column_config.TextColumn("Nro Factura"),
-    "Monto":      st.column_config.NumberColumn("Monto ($)",     format="$%d", min_value=0),
-}
-df_proveedores = st.data_editor(
-    st.session_state.df_proveedores,
-    column_config=cfg_prov,
-    num_rows="dynamic",
-    use_container_width=True,
-    key="ed_prov"
-)
-total_prov_efectivo = df_proveedores[df_proveedores["Forma Pago"] == "Efectivo"]["Monto"].sum()
-st.caption(f"Pagos en efectivo: ${total_prov_efectivo:,.2f}  ·  "
-           f"Digital/Banco: ${df_proveedores[df_proveedores['Forma Pago'] == 'Digital / Banco']['Monto'].sum():,.2f}")
+with col_mov2:
+    st.markdown("**Transferencias Entrantes**")
+    cfg_transf = {"Monto": st.column_config.NumberColumn("($)", format="$%d", min_value=0)}
+    df_transferencias = st.data_editor(st.session_state['df_transferencias'], column_config=cfg_transf,
+                                        num_rows="dynamic", use_container_width=True, key="ed_df_transferencias")
+    total_transf_in = df_transferencias["Monto"].sum() if not df_transferencias.empty else 0.0
+    st.caption(f"Subtotal: **${total_transf_in:,.2f}**")
 
-# ─── Mercadería Empleados ─────────────────────
-encabezado_seccion("Mercadería de Empleados", "👤")
+divider()
+
+
+# ── SECCIÓN 3: MERCADERÍA EMPLEADOS ──────────────────────────────
+seccion("Mercadería de Empleados", "👥")
+
 cfg_emp = {
     "Empleado": st.column_config.SelectboxColumn("Empleado", options=lista_empleados, required=True),
-    "Monto":    st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0),
+    "Monto":    st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0)
 }
-df_empleados = st.data_editor(
-    st.session_state.df_empleados,
-    column_config=cfg_emp,
-    num_rows="dynamic",
-    use_container_width=True,
-    key="ed_emp"
-)
-total_empleados = df_empleados["Monto"].sum()
-st.caption(f"Total empleados: ${total_empleados:,.2f}")
+df_empleados = st.data_editor(st.session_state['df_empleados'], column_config=cfg_emp,
+                               num_rows="dynamic", use_container_width=True, key="ed_emp")
+total_empleados = df_empleados["Monto"].sum() if not df_empleados.empty else 0.0
+st.caption(f"Total consumo empleados: **${total_empleados:,.2f}**")
 
-# ─── Sync session_state ───────────────────────
-st.session_state['df_transferencias'] = df_transferencias
-st.session_state['df_vales']          = df_vales
-st.session_state['df_salidas']        = df_salidas
-st.session_state['df_proveedores']    = df_proveedores
-st.session_state['df_empleados']      = df_empleados
+divider()
 
 
-# ═════════════════════════════════════════════
-#  SECCIÓN 4 — RESULTADO DEL CIERRE
-# ═════════════════════════════════════════════
-linea_dorada()
-encabezado_seccion("Resultado del Cierre", "📊")
+# ── SECCIÓN 4: EFECTIVO Y DIGITAL ────────────────────────────────
+seccion("Totales de Venta", "💰")
 
-total_ingresos = efectivo_neto + total_digital + total_transf_in
-total_egresos  = total_salidas + total_prov_efectivo + total_vales + total_empleados
-diferencia     = balanza_total - (total_ingresos - total_egresos)
+col_ef1, col_ef2 = st.columns(2)
 
-# Fila de métricas resumen
-m1, m2, m3, m4 = st.columns(4)
-m1.metric("Venta Balanza",     f"${balanza_total:,.2f}")
-m2.metric("Efectivo en Caja",  f"${efectivo_neto:,.2f}")
-m3.metric("Cobros Digitales",  f"${total_digital:,.2f}")
-m4.metric("Total Egresos",     f"${total_egresos:,.2f}")
+with col_ef1:
+    st.markdown("**Ventas del día**")
+    balanza_total      = st.number_input("Total Balanza (Venta Real)", 0.0, step=100.0)
+    registradora_total = st.number_input("Registradora / Ticket Z",   0.0, step=100.0)
+
+    with st.expander("🧮 Calculadora de Billetes", expanded=False):
+        c1b, c2b = st.columns(2)
+        with c1b:
+            b20k = st.number_input("Billetes $20.000", 0, step=1)
+            b10k = st.number_input("Billetes $10.000", 0, step=1)
+            b5k  = st.number_input("Billetes $5.000",  0, step=1)
+            b2k  = st.number_input("Billetes $2.000",  0, step=1)
+        with c2b:
+            b1k  = st.number_input("Billetes $1.000", 0, step=1)
+            b500 = st.number_input("Billetes $500",   0, step=1)
+            b200 = st.number_input("Billetes $200",   0, step=1)
+            b100 = st.number_input("Billetes $100",   0, step=1)
+        total_fisico = (b20k*20000 + b10k*10000 + b5k*5000 + b2k*2000
+                       + b1k*1000 + b500*500 + b200*200 + b100*100)
+        st.metric("Total calculado", f"${total_fisico:,.2f}")
+
+    efectivo_neto = st.number_input("✅ Efectivo Total en Caja",
+                                    value=float(total_fisico), step=100.0)
+
+with col_ef2:
+    st.markdown("**Cobros Digitales**")
+    cd1, cd2 = st.columns(2)
+    with cd1:
+        mp     = st.number_input("Mercado Pago", 0.0, step=100.0)
+        clover = st.number_input("Clover",       0.0, step=100.0)
+    with cd2:
+        nave = st.number_input("Nave", 0.0, step=100.0)
+        bbva = st.number_input("BBVA", 0.0, step=100.0)
+
+    total_digital = mp + nave + clover + bbva
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.metric("Total Digital", f"${total_digital:,.2f}")
+
+divider()
+
+
+# ── SECCIÓN 5: PROVEEDORES Y SALIDAS ─────────────────────────────
+seccion("Proveedores y Salidas", "📦")
+
+col_prov1, col_prov2 = st.columns(2)
+
+with col_prov1:
+    st.markdown("**Pago a Proveedores**")
+    cfg_prov = {
+        "Proveedor":  st.column_config.SelectboxColumn("Proveedor", options=lista_proveedores, required=True),
+        "Forma Pago": st.column_config.SelectboxColumn("Método",    options=["Efectivo", "Digital / Banco"], required=True),
+        "Nro Factura":st.column_config.TextColumn("Nro. Factura"),
+        "Monto":      st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0),
+    }
+    df_proveedores = st.data_editor(st.session_state['df_proveedores'], column_config=cfg_prov,
+                                    num_rows="dynamic", use_container_width=True, key="ed_prov")
+    total_prov_efectivo = df_proveedores[df_proveedores["Forma Pago"] == "Efectivo"]["Monto"].sum()
+    st.caption(f"Total en efectivo: **${total_prov_efectivo:,.2f}**")
+
+with col_prov2:
+    st.markdown("**Gastos Varios / Salidas de Caja**")
+    cfg_sal = {
+        "Descripción": st.column_config.TextColumn("Detalle", required=True),
+        "Monto":       st.column_config.NumberColumn("($)", format="$%d", min_value=0),
+    }
+    df_salidas = st.data_editor(st.session_state['df_salidas'], column_config=cfg_sal,
+                                num_rows="dynamic", use_container_width=True, key="ed_df_salidas")
+    total_salidas = df_salidas["Monto"].sum() if not df_salidas.empty else 0.0
+    st.caption(f"Subtotal: **${total_salidas:,.2f}**")
+
+divider()
+
+
+# ── SECCIÓN 6: RESULTADO FINAL ────────────────────────────────────
+seccion("Resultado del Cierre", "📊")
+
+total_ingresos  = efectivo_neto + total_digital + total_transf_in
+total_egresos   = total_salidas + total_prov_efectivo + total_vales + total_empleados
+diferencia      = balanza_total - (total_ingresos - total_egresos)
+
+# KPIs
+k1, k2, k3, k4 = st.columns(4)
+k1.metric("Venta Balanza",    f"${balanza_total:,.2f}")
+k2.metric("Efectivo en Caja", f"${efectivo_neto:,.2f}")
+k3.metric("Total Digital",    f"${total_digital:,.2f}")
+k4.metric("Total Egresos",    f"${total_egresos:,.2f}")
 
 st.markdown("<br>", unsafe_allow_html=True)
-panel_resultado(diferencia)
+
+# Panel diferencia
+if diferencia == 0:
+    clase   = "ok"
+    icono   = "✅"
+    estado  = "CAJA CUADRADA"
+    dif_txt = "$0,00"
+elif diferencia > 0:
+    clase   = "faltante"
+    icono   = "⚠️"
+    estado  = "FALTANTE"
+    dif_txt = f"${diferencia:,.2f}"
+else:
+    clase   = "sobrante"
+    icono   = "ℹ️"
+    estado  = "SOBRANTE"
+    dif_txt = f"${abs(diferencia):,.2f}"
+
+st.markdown(f"""
+    <div class="esf-resultado-panel">
+        <div class="esf-diferencia {clase}">
+            {icono}&nbsp;&nbsp;DIFERENCIA: {dif_txt}&nbsp;&nbsp;|&nbsp;&nbsp;{estado}
+        </div>
+    </div>
+""", unsafe_allow_html=True)
+
 st.markdown("<br>", unsafe_allow_html=True)
 
-# ─── Botones de acción ────────────────────────
-btn_col1, btn_col2 = st.columns(2)
-with btn_col1:
+# ── ACCIONES FINALES ──────────────────────────────────────────────
+acc1, acc2, acc3 = st.columns([2, 2, 3])
+
+with acc1:
     if st.button("💾  Guardar en Drive", use_container_width=True):
-        if conn is None:
-            st.error("No hay conexión con Google Sheets.")
-        else:
-            confirmar = st.checkbox("✅ Confirmo que los datos son correctos antes de guardar")
-            if confirmar:
-                datos = {
-                    "Fecha":      fecha_input.strftime("%d/%m/%Y"),
-                    "Cajero":     cajero,
-                    "Balanza":    balanza_total,
-                    "Digital":    total_digital,
-                    "Efectivo":   efectivo_neto,
-                    "Diferencia": diferencia,
-                }
-                if guardar_todo_en_nube(datos, df_proveedores, df_empleados):
-                    st.success("¡Guardado exitoso!")
-                    st.balloons()
+        # Persistir estado de sesión antes de guardar
+        st.session_state['df_vales']          = df_vales
+        st.session_state['df_transferencias'] = df_transferencias
+        st.session_state['df_empleados']      = df_empleados
+        st.session_state['df_proveedores']    = df_proveedores
+        st.session_state['df_salidas']        = df_salidas
 
-with btn_col2:
+        datos = {
+            "Fecha":      fecha_input.strftime("%d/%m/%Y"),
+            "Cajero":     cajero,
+            "Balanza":    balanza_total,
+            "Digital":    total_digital,
+            "Efectivo":   efectivo_neto,
+            "Diferencia": diferencia,
+        }
+        if conn is not None:
+            if guardar_todo_en_nube(datos, df_proveedores, df_empleados):
+                st.success("✅ Cierre guardado exitosamente en Google Sheets.")
+                st.balloons()
+        else:
+            st.error("No hay conexión con Google Sheets.")
+
+with acc2:
     if st.button("📄  Generar PDF", use_container_width=True):
         desglose = {"MP": mp, "Nave": nave, "Clover": clover, "BBVA": bbva}
         pdf_bytes = generar_pdf_profesional(
@@ -631,9 +854,13 @@ with btn_col2:
             df_vales, df_proveedores, df_empleados, diferencia, desglose
         )
         st.download_button(
-            "⬇️  Descargar PDF",
-            pdf_bytes,
-            file_name=f"Cierre_{fecha_input}.pdf",
+            label="⬇️  Descargar PDF del Cierre",
+            data=pdf_bytes,
+            file_name=f"Cierre_ESF_{fecha_input.strftime('%d-%m-%Y')}.pdf",
             mime="application/pdf",
             use_container_width=True
         )
+
+with acc3:
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.caption(f"Turno: **{cajero}**  ·  Fecha: **{fecha_input.strftime('%d/%m/%Y')}**  ·  Registradora Z: **${registradora_total:,.2f}**")
