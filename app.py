@@ -29,23 +29,26 @@ hide_st_style = """
 /* Variables de paleta */
 :root {
     --verde-oscuro: #2E4A2E;
-    --verde-medio: #3D6B3D;
-    --crema:        #F5F0E8;
-    --arena:        #E8DCC8;
+    --verde-medio:  #3D6B3D;
+    --bordo:        #7B1F2E;
+    --bordo-claro:  #A3344A;
+    --bordo-suave:  #F2E8EA;
+    --crema:        #F7F2EA;
+    --arena:        #E6D8C8;
     --miel:         #C8954A;
     --miel-claro:   #E8B96A;
-    --texto-oscuro: #1A2E1A;
-    --texto-medio:  #4A5E4A;
+    --texto-oscuro: #1A1A1A;
+    --texto-medio:  #4A3A3A;
     --blanco:       #FFFFFF;
-    --sombra:       rgba(46,74,46,0.12);
+    --sombra:       rgba(123,31,46,0.10);
 }
 
 /* Fondo general */
 .stApp {
     background-color: var(--crema);
     background-image: 
-        radial-gradient(ellipse at 10% 0%, rgba(200,149,74,0.08) 0%, transparent 60%),
-        radial-gradient(ellipse at 90% 100%, rgba(46,74,46,0.06) 0%, transparent 60%);
+        radial-gradient(ellipse at 10% 0%, rgba(123,31,46,0.06) 0%, transparent 60%),
+        radial-gradient(ellipse at 90% 100%, rgba(123,31,46,0.04) 0%, transparent 60%);
     font-family: 'Lato', sans-serif;
 }
 
@@ -62,7 +65,7 @@ header    {visibility: hidden;}
 /* ── TÍTULO PRINCIPAL ── */
 h1 {
     font-family: 'Playfair Display', serif !important;
-    color: var(--verde-oscuro) !important;
+    color: var(--bordo) !important;
     font-size: 2.2rem !important;
     letter-spacing: 0.02em;
     margin-bottom: 0.2rem !important;
@@ -81,9 +84,9 @@ h1 {
 /* ── CABECERA DECORATIVA ── */
 .header-divider {
     border: none;
-    border-top: 2px solid var(--miel);
+    border-top: 2px solid var(--bordo);
     margin: 0.5rem 0 1.8rem 0;
-    opacity: 0.6;
+    opacity: 0.75;
 }
 
 /* ── TARJETAS DE SECCIÓN ── */
@@ -91,6 +94,7 @@ h1 {
     background: var(--blanco);
     border-radius: 12px;
     border: 1px solid var(--arena);
+    border-left: 4px solid var(--bordo);
     padding: 1.4rem 1.6rem 1rem 1.6rem;
     margin-bottom: 1.2rem;
     box-shadow: 0 2px 12px var(--sombra);
@@ -98,7 +102,7 @@ h1 {
 
 .seccion-titulo {
     font-family: 'Playfair Display', serif;
-    color: var(--verde-oscuro);
+    color: var(--bordo);
     font-size: 1.05rem;
     font-weight: 600;
     margin-bottom: 0.7rem;
@@ -108,7 +112,7 @@ h1 {
 }
 
 .seccion-titulo .icono {
-    background: var(--verde-oscuro);
+    background: var(--bordo);
     color: var(--blanco);
     border-radius: 6px;
     width: 24px;
@@ -130,7 +134,7 @@ h1 {
     font-family: 'Lato', sans-serif !important;
     font-size: 0.82rem !important;
     font-weight: 700 !important;
-    color: var(--verde-medio) !important;
+    color: var(--bordo) !important;
     text-transform: uppercase !important;
     letter-spacing: 0.08em !important;
 }
@@ -149,8 +153,8 @@ h1 {
 }
 .stTextInput input:focus,
 .stNumberInput input:focus {
-    border-color: var(--miel) !important;
-    box-shadow: 0 0 0 3px rgba(200,149,74,0.15) !important;
+    border-color: var(--bordo) !important;
+    box-shadow: 0 0 0 3px rgba(123,31,46,0.12) !important;
 }
 
 /* ── BOTONES ── */
@@ -167,25 +171,25 @@ h1 {
 
 /* Botón primario (Guardar en Drive) */
 div[data-testid="column"]:nth-child(2) .stButton > button {
-    background: var(--verde-oscuro) !important;
+    background: var(--bordo) !important;
     color: var(--blanco) !important;
     border: none !important;
-    box-shadow: 0 3px 10px rgba(46,74,46,0.25) !important;
+    box-shadow: 0 3px 10px rgba(123,31,46,0.25) !important;
 }
 div[data-testid="column"]:nth-child(2) .stButton > button:hover {
-    background: var(--verde-medio) !important;
+    background: var(--bordo-claro) !important;
     transform: translateY(-1px) !important;
-    box-shadow: 0 5px 14px rgba(46,74,46,0.3) !important;
+    box-shadow: 0 5px 14px rgba(123,31,46,0.3) !important;
 }
 
 /* Botón secundario (Generar PDF) */
 div[data-testid="column"]:nth-child(3) .stButton > button {
     background: transparent !important;
-    color: var(--verde-oscuro) !important;
-    border: 2px solid var(--verde-oscuro) !important;
+    color: var(--bordo) !important;
+    border: 2px solid var(--bordo) !important;
 }
 div[data-testid="column"]:nth-child(3) .stButton > button:hover {
-    background: var(--verde-oscuro) !important;
+    background: var(--bordo) !important;
     color: var(--blanco) !important;
     transform: translateY(-1px) !important;
 }
@@ -208,14 +212,14 @@ div[data-testid="column"]:nth-child(3) .stButton > button:hover {
 
 /* ── METRIC (diferencia) ── */
 div[data-testid="metric-container"] {
-    background: var(--verde-oscuro);
+    background: var(--bordo);
     border-radius: 12px;
     padding: 1rem 1.2rem;
     color: var(--blanco);
-    box-shadow: 0 4px 16px rgba(46,74,46,0.2);
+    box-shadow: 0 4px 16px rgba(123,31,46,0.2);
 }
 div[data-testid="metric-container"] label {
-    color: var(--arena) !important;
+    color: var(--bordo-suave) !important;
     font-family: 'Lato', sans-serif !important;
     font-size: 0.75rem !important;
     text-transform: uppercase !important;
@@ -256,7 +260,8 @@ div[data-testid="metric-container"] [data-testid="metric-value"] {
 
 /* ── SEPARADOR ── */
 hr {
-    border-color: var(--arena) !important;
+    border-color: var(--bordo) !important;
+    opacity: 0.3 !important;
     margin: 1.5rem 0 !important;
 }
 
@@ -270,12 +275,13 @@ hr {
 /* ── RESULTADO DEL CIERRE ── */
 .resultado-header {
     font-family: 'Playfair Display', serif;
-    color: var(--verde-oscuro);
+    color: var(--bordo);
     font-size: 1.3rem;
     font-weight: 700;
     padding-bottom: 0.5rem;
-    border-bottom: 2px solid var(--miel);
+    border-bottom: 2px solid var(--bordo);
     margin-bottom: 1.2rem;
+    opacity: 0.9;
 }
 
 /* ── TOTALES PILLBOX ── */
@@ -336,7 +342,7 @@ def check_password():
 
     st.markdown("""
         <div style='text-align:center; padding: 3rem 0 1rem 0;'>
-            <div style='font-family: Playfair Display, serif; font-size: 2rem; color: #2E4A2E; font-weight: 700;'>
+            <div style='font-family: Playfair Display, serif; font-size: 2rem; color: #7B1F2E; font-weight: 700;'>
                 Estancia San Francisco
             </div>
             <div style='font-family: Lato, sans-serif; font-size: 0.78rem; color: #C8954A; 
