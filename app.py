@@ -60,7 +60,10 @@ except:
 
 # --- 2. CARGA DE DATOS MAESTROS ---
 lista_proveedores = ["Pan Rustico", "Pan Fresh", "Dharma", "ValMaira", "Aprea", "CocaCola", "Grenn&Co", "Basile Walter", "Otro"]
-lista_empleados = ["Santiago", "Julieta", "Mariela", "Fernanda", "Brian", "Erika", "Oriana"]
+
+# MODIFICACIÓN 1: Separamos los cajeros de los empleados generales
+lista_cajeros = ["Leandro", "Natalia", "Santiago"]
+lista_empleados = ["Leandro", "Natalia", "Santiago", "Julieta", "Mariela", "Fernanda", "Brian", "Erika", "Oriana"]
 
 df_directorio = pd.DataFrame()
 if 'conn' in globals():
@@ -77,10 +80,10 @@ session_keys = {
     'df_salidas': ["Descripción", "Monto"],
     'df_transferencias': ["Monto"],
     'df_vales': ["Descripción", "Monto"],
-    'df_errores': ["Monto"],
+    'df_errores': ["Descripción", "Monto"], # MODIFICACIÓN 2: Agregamos "Descripción" para los errores
     'df_descuentos': ["Monto"],
     'df_proveedores': ["Proveedor", "Forma Pago", "Nro Factura", "Monto"],
-    'df_empleados': ["Empleado", "Monto"] # NUEVA SECCIÓN
+    'df_empleados': ["Empleado", "Monto"]
 }
 
 for key, cols in session_keys.items():
@@ -169,6 +172,7 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
     dibujar_tabla("TRANSFERENCIAS (Entrantes)", df_transferencias, label_fijo="Transferencia")
     dibujar_tabla("GASTOS VARIOS / SALIDAS", df_salidas)
     dibujar_tabla("VALES / FIADOS", df_vales)
+    dibujar_tabla("ERRORES DE FACTURACIÓN", df_errores) # MODIFICACIÓN 4: Añadido al PDF
     
     # Diferencia Final
     pdf.ln(5)
@@ -192,14 +196,17 @@ st.title("Estancia San Francisco")
 # 1. FECHA Y CAJERO
 col_enc1, col_enc2 = st.columns(2)
 with col_enc1: fecha_input = st.date_input("Fecha", datetime.today())
-with col_enc2: cajero = st.selectbox("Cajero de Turno", lista_empleados) # Usamos la misma lista
+with col_enc2: cajero = st.selectbox("Cajero de Turno", lista_cajeros) # MODIFICACIÓN 1: Usa lista_cajeros
 st.markdown("---")
 
 # 2. SECCIONES DE CARGA
 df_vales, total_vales = input_tabla("Vales / Fiados", "df_vales")
 df_transferencias, total_transf_in = input_tabla("Transferencias (Entrantes)", "df_transferencias", solo_monto=True)
 
-# 3. MERCADERÍA EMPLEADOS (NUEVA)
+# MODIFICACIÓN 3: Agregamos la tabla de errores a la vista
+df_errores, total_errores = input_tabla("Errores de Facturación (Tickets sin ingreso)", "df_errores")
+
+# 3. MERCADERÍA EMPLEADOS
 st.markdown("**Mercadería de Empleados**")
 cfg_emp = {
     "Empleado": st.column_config.SelectboxColumn("Empleado", options=lista_empleados, required=True),
@@ -219,7 +226,7 @@ with col_core2:
     with st.expander("Calculadora de Billetes", expanded=False):
         b20k = st.number_input("$20k", 0); b10k = st.number_input("$10k", 0)
         b2k = st.number_input("$2k", 0); b1k = st.number_input("$1k", 0)
-        total_fisico = (b20k*20000)+(b10k*10000)+(b2k*2000)+(b1k*1000) # (Simplificado para el ejemplo)
+        total_fisico = (b20k*20000)+(b10k*10000)+(b2k*2000)+(b1k*1000)
     efectivo_neto = st.number_input("Efectivo Total en Caja", value=float(total_fisico))
 
 st.markdown("**Cobros Digitales**")
@@ -246,7 +253,8 @@ df_salidas, total_salidas = input_tabla("Gastos Varios (Salidas de Caja)", "df_s
 
 # --- 7. RESULTADO FINAL ---
 st.markdown("### Resultado del Cierre")
-total_justificado = total_digital + efectivo_neto + total_transf_in + total_salidas + total_prov_efectivo + total_vales + total_empleados
+# MODIFICACIÓN 5: Sumamos total_errores al dinero justificado para que compense lo que pide la balanza
+total_justificado = total_digital + efectivo_neto + total_transf_in + total_salidas + total_prov_efectivo + total_vales + total_empleados + total_errores
 diferencia = balanza_total - total_justificado
 
 c1, c2, c3 = st.columns(3)
@@ -263,8 +271,9 @@ if c2.button("Guardar en Drive", use_container_width=True):
 
 if c3.button("Generar PDF", use_container_width=True):
     desglose = {"MP": mp, "Nave": nave, "Clover": clover, "BBVA": bbva}
+    # MODIFICACIÓN 6: Pasamos df_errores real a la función de PDF
     pdf_bytes = generar_pdf_profesional(fecha_input, cajero, balanza_total, registradora_total, 
                                        total_digital, efectivo_neto, df_salidas, df_transferencias, 
-                                       pd.DataFrame(), df_vales, pd.DataFrame(), df_proveedores, 
+                                       df_errores, df_vales, pd.DataFrame(), df_proveedores, 
                                        df_empleados, diferencia, desglose)
     st.download_button("Descargar PDF", pdf_bytes, f"Cierre_{fecha_input}.pdf", "application/pdf")
