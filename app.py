@@ -172,8 +172,8 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
     dibujar_tabla("TRANSFERENCIAS (Entrantes)", df_transferencias, label_fijo="Transferencia") 
     dibujar_tabla("GASTOS VARIOS / SALIDAS", df_salidas) 
     dibujar_tabla("VALES / FIADOS", df_vales) 
-    dibujar_tabla("ERRORES DE FACTURACIÓN", df_errores)  
-    dibujar_tabla("DESCUENTOS Y PROMOS", df_descuentos)
+    df_combinado = pd.concat([df_errores, df_descuentos], ignore_index=True)
+    dibujar_tabla("ERRORES FACTURACIÓN / DESCUENTOS", df_combinado)
      
     pdf.ln(5) 
     estado, color_texto = ("FALTANTE", (200, 0, 0)) if diferencia > 0 else ("SOBRANTE", (0, 100, 0)) 
