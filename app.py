@@ -222,17 +222,24 @@ if es_dia_promo:
         st.markdown(f"### Cobrar: **${total_a_cobrar:,.2f}**")
         st.caption(f"Descuento: ${calculo_descuento:,.2f}")
         
-        if st.button("Agregar descuento a la caja", use_container_width=True):
+if st.button("Agregar descuento a la caja", use_container_width=True):
             if calculo_descuento > 0:
-                # Guardamos el descuento en la tabla de errores
+                # 1. Guardamos el descuento en la tabla de errores
                 nueva_fila = pd.DataFrame([{"Descripción": f"Promo {int(tipo_dto*100)}% Tarjeta", "Monto": calculo_descuento}])
                 st.session_state.df_errores = pd.concat([st.session_state.df_errores, nueva_fila], ignore_index=True)
                 
-                # Vaciamos la calculadora para el próximo cliente
+                # 2. Vaciamos los DataFrames para el próximo cliente
                 st.session_state['df_calc_con'] = pd.DataFrame(columns=["Monto"])
                 st.session_state['df_calc_sin'] = pd.DataFrame(columns=["Monto"])
                 
-                st.success("Cobro registrado. Calculadora limpia para el próximo cliente.")
+                # 3. ¡LA CLAVE! Borramos el estado interno de los widgets para forzar que se limpien
+                for widget_key in ["calc_con", "calc_sin", "ed_df_errores"]:
+                    if widget_key in st.session_state:
+                        del st.session_state[widget_key]
+                
+                # 4. Usamos toast en lugar de success para que sobreviva al rerun
+                st.toast("Cobro registrado. Calculadora limpia.", icon="✅")
+                
                 st.rerun()
             else:
                 st.warning("No hay importes con descuento para aplicar.")
