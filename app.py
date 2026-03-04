@@ -197,7 +197,7 @@ es_dia_promo = fecha_input.weekday() in [0, 2] # 0=Lunes, 2=Miércoles
 if es_dia_promo:
     st.info("Hoy hay Somos Avellaneda (10% / 15%)")
     with st.popover("Somos Avellaneda"):
-        st.write("Importes de los productos para el descuento:")
+        st.write("----- Importes de los productos para el descuento -----:")
         
         c_dto, s_dto = st.columns(2)
         
