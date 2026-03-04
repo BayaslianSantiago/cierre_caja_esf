@@ -59,7 +59,6 @@ except:
     st.error("Error de conexión con Google Sheets") 
 
 # --- 2. CARGA DE DATOS MAESTROS --- 
-
 lista_proveedores = ["Pan Rustico", "Pan Fresh", "Dharma", "ValMaira", "Aprea", "CocaCola", "Grenn&Co", "Basile Walter", "Otro"] 
 lista_cajeros = ["Leandro", "Natalia", "Santiago"] 
 lista_empleados = ["Leandro", "Natalia", "Santiago", "Julieta", "Mariela", "Fernanda", "Brian", "Erika", "Oriana"] 
@@ -80,11 +79,11 @@ session_keys = {
     'df_transferencias': ["Monto"], 
     'df_vales': ["Descripción", "Monto"], 
     'df_errores': ["Descripción", "Monto"], 
-    'df_descuentos': ["Monto"], 
+    'df_descuentos': ["Descripción", "Monto"], # Ajustado para descripciones manuales
     'df_proveedores': ["Proveedor", "Forma Pago", "Nro Factura", "Monto"], 
     'df_empleados': ["Empleado", "Monto"], 
-    'df_calc_con': ["Monto"], # NUEVO: Para la calculadora 
-    'df_calc_sin': ["Monto"]  # NUEVO: Para la calculadora 
+    'df_calc_con': ["Monto"], 
+    'df_calc_sin': ["Monto"]  
 } 
 
 for key, cols in session_keys.items(): 
@@ -160,7 +159,6 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
         pdf.cell(180, 6, f"  {titulo} (Total: $ {df['Monto'].sum():,.2f})", ln=1, fill=True); pdf.set_font("Arial", '', 9) 
         for _, row in df.iterrows(): 
             if row['Monto'] > 0: 
-                # Lógica adaptada para que reconozca a los proveedores
                 if 'Proveedor' in df.columns:
                     txt = f"{row['Proveedor']} ({row['Forma Pago']})"
                 else:
@@ -169,12 +167,13 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
                 pdf.cell(130, 5, f"      - {txt}"); pdf.cell(40, 5, f"$ {row['Monto']:,.2f}", align='R', ln=1) 
         pdf.ln(2) 
 
-    dibujar_tabla("PAGO A PROVEEDORES", df_proveedores) # <--- ACÁ AGREGAMOS LOS PROVEEDORES
+    dibujar_tabla("PAGO A PROVEEDORES", df_proveedores) 
     dibujar_tabla("MERCADERÍA EMPLEADOS", df_empleados) 
     dibujar_tabla("TRANSFERENCIAS (Entrantes)", df_transferencias, label_fijo="Transferencia") 
     dibujar_tabla("GASTOS VARIOS / SALIDAS", df_salidas) 
     dibujar_tabla("VALES / FIADOS", df_vales) 
-    dibujar_tabla("PROMOS / ERRORES FACTURACIÓN", df_errores)  
+    dibujar_tabla("ERRORES DE FACTURACIÓN", df_errores)  
+    dibujar_tabla("DESCUENTOS Y PROMOS", df_descuentos)
      
     pdf.ln(5) 
     estado, color_texto = ("FALTANTE", (200, 0, 0)) if diferencia > 0 else ("SOBRANTE", (0, 100, 0)) 
@@ -182,7 +181,7 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
     pdf.set_font("Arial", 'B', 16); pdf.set_text_color(*color_texto) 
     pdf.cell(0, 14, f"CAJA REAL: $ {diferencia:,.2f} ({estado})", ln=1, align='C', border=1) 
      
-    return pdf.output(dest="S").encode("latin-1")
+    return pdf.output(dest="S").encode("latin-1") 
 
 # --- 6. INTERFAZ UI --- 
 def input_tabla(titulo, key, solo_monto=False): 
@@ -191,6 +190,10 @@ def input_tabla(titulo, key, solo_monto=False):
     if not solo_monto: cfg["Descripción"] = st.column_config.TextColumn("Detalle", required=True) 
 
     df = st.data_editor(st.session_state[key], column_config=cfg, num_rows="dynamic", use_container_width=True, key=f"ed_{key}") 
+    
+    # Guarda las ediciones manuales en la memoria global
+    st.session_state[key] = df 
+    
     return df, (df["Monto"].sum() if not df.empty else 0.0) 
 
 st.title("Estancia San Francisco") 
@@ -200,7 +203,7 @@ with col_enc1: fecha_input = st.date_input("Fecha", datetime.today())
 with col_enc2: cajero = st.selectbox("Cajero de Turno", lista_cajeros) 
 st.markdown("---") 
 
-# --- NUEVA FUNCIONALIDAD: CALCULADORA DE PROMOS (Lunes y Miércoles) --- 
+# --- NUEVA FUNCIONALIDAD: CALCULADORA DE PROMOS --- 
 es_dia_promo = fecha_input.weekday() in [0, 2] # 0=Lunes, 2=Miércoles 
 if es_dia_promo: 
     st.info("Hoy hay Somos Avellaneda (10% / 15%)") 
@@ -232,15 +235,20 @@ if es_dia_promo:
          
         if st.button("Agregar descuento a la caja", use_container_width=True): 
             if calculo_descuento > 0: 
-                # Guardamos el descuento en la tabla de errores 
-                nueva_fila = pd.DataFrame([{"Descripción": f"Promo {int(tipo_dto*100)}% Tarjeta Somos A", "Monto": calculo_descuento}]) 
-                st.session_state.df_errores = pd.concat([st.session_state.df_errores, nueva_fila], ignore_index=True) 
+                # Guardamos el descuento en la tabla de DESCUENTOS
+                nueva_fila = pd.DataFrame([{"Descripción": f"Promo {int(tipo_dto*100)}% Tarjeta", "Monto": calculo_descuento}]) 
+                st.session_state.df_descuentos = pd.concat([st.session_state.df_descuentos, nueva_fila], ignore_index=True) 
                  
                 # Vaciamos la calculadora para el próximo cliente 
                 st.session_state['df_calc_con'] = pd.DataFrame(columns=["Monto"]) 
                 st.session_state['df_calc_sin'] = pd.DataFrame(columns=["Monto"]) 
+                
+                # Borramos el estado interno de los widgets
+                for widget_key in ["calc_con", "calc_sin", "ed_df_descuentos"]:
+                    if widget_key in st.session_state:
+                        del st.session_state[widget_key]
                  
-                st.success("Cobro registrado. Calculadora limpia para el próximo cliente.") 
+                st.toast("Cobro registrado. Calculadora limpia.", icon="✅") 
                 st.rerun() 
             else: 
                 st.warning("No hay importes con descuento para aplicar.") 
@@ -248,7 +256,9 @@ if es_dia_promo:
 # --- RESTO DE TABLAS --- 
 df_vales, total_vales = input_tabla("Vales / Fiados", "df_vales") 
 df_transferencias, total_transf_in = input_tabla("Transferencias (Entrantes)", "df_transferencias", solo_monto=True) 
-df_errores, total_errores = input_tabla("Errores / Descuentos Promos", "df_errores") 
+
+df_errores, total_errores = input_tabla("Errores de Facturación", "df_errores") 
+df_descuentos, total_descuentos = input_tabla("Descuentos Promocionales", "df_descuentos") 
 
 # MERCADERÍA EMPLEADOS 
 st.markdown("**Mercadería de Empleados**") 
@@ -258,6 +268,8 @@ cfg_emp = {
 } 
 
 df_empleados = st.data_editor(st.session_state.df_empleados, column_config=cfg_emp, num_rows="dynamic", use_container_width=True, key="ed_emp") 
+# Guardamos las ediciones manuales en memoria global
+st.session_state.df_empleados = df_empleados 
 total_empleados = df_empleados["Monto"].sum() 
 st.markdown("---") 
 
@@ -289,20 +301,23 @@ cfg_prov = {
 } 
 
 df_proveedores = st.data_editor(st.session_state.df_proveedores, column_config=cfg_prov, num_rows="dynamic", use_container_width=True, key="ed_prov") 
+# Guardamos las ediciones manuales en memoria global
+st.session_state.df_proveedores = df_proveedores
 total_prov_efectivo = df_proveedores[df_proveedores["Forma Pago"] == "Efectivo"]["Monto"].sum() 
+
 df_salidas, total_salidas = input_tabla("Gastos Varios (Salidas de Caja)", "df_salidas") 
 
 # --- 7. RESULTADO FINAL --- 
 st.markdown("### Resultado del Cierre") 
 
-total_justificado = total_digital + efectivo_neto + total_transf_in + total_salidas + total_prov_efectivo + total_vales + total_empleados + total_errores 
+total_justificado = total_digital + efectivo_neto + total_transf_in + total_salidas + total_prov_efectivo + total_vales + total_empleados + total_errores + total_descuentos
 diferencia = balanza_total - total_justificado 
 
 c1, c2, c3 = st.columns(3) 
 c1.metric("Diferencia", f"${diferencia:,.2f}", delta_color="inverse" if diferencia > 0 else "normal") 
 
 if c2.button("Guardar en Drive", use_container_width=True): 
-    # Calculamos el Estado de la caja para enviarlo al Excel
+    # Calculamos el Estado de la caja
     if diferencia == 0:
         estado_caja = "OK"
     elif diferencia > 0:
@@ -310,7 +325,7 @@ if c2.button("Guardar en Drive", use_container_width=True):
     else:
         estado_caja = "SOBRANTE"
 
-    # Agregamos todos los campos que espera tu Google Sheets
+    # Datos completos para Google Sheets
     datos = { 
         "Fecha": fecha_input.strftime("%d/%m/%Y"), 
         "Cajero": cajero, 
@@ -321,19 +336,20 @@ if c2.button("Guardar en Drive", use_container_width=True):
         "Salidas": total_salidas,
         "Vales": total_vales,
         "Errores": total_errores,
-        "Proveedores": total_prov_efectivo,  # <-- Reemplazamos Descuentos por Proveedores
+        "Descuentos": total_descuentos,
+        "Proveedores": total_prov_efectivo,
         "Diferencia": diferencia,
         "Estado": estado_caja
     } 
     
     if guardar_todo_en_nube(datos, df_proveedores, df_empleados): 
         st.success("Guardado exitoso") 
-        st.balloons()
+        st.balloons() 
 
 if c3.button("Generar PDF", use_container_width=True): 
     desglose = {"MP": mp, "Nave": nave, "Clover": clover, "BBVA": bbva} 
     pdf_bytes = generar_pdf_profesional(fecha_input, cajero, balanza_total, registradora_total,  
                                         total_digital, efectivo_neto, df_salidas, df_transferencias,  
-                                        df_errores, df_vales, pd.DataFrame(), df_proveedores,  
+                                        df_errores, df_vales, df_descuentos, df_proveedores,  
                                         df_empleados, diferencia, desglose) 
     st.download_button("Descargar PDF", pdf_bytes, f"Cierre_{fecha_input}.pdf", "application/pdf")
