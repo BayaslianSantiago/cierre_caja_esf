@@ -169,10 +169,19 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
 
     dibujar_tabla("PAGO A PROVEEDORES", df_proveedores) 
     dibujar_tabla("MERCADERÍA EMPLEADOS", df_empleados) 
-    dibujar_tabla("TRANSFERENCIAS (Entrantes)", df_transferencias, label_fijo="Transferencia") 
+    # --- REEMPLAZA LA LÍNEA DE TRANSFERENCIAS POR ESTO ---
+    if not df_transferencias.empty and df_transferencias['Monto'].sum() > 0:
+        total_transf_acumulado = df_transferencias['Monto'].sum()
+        df_transf_resumida = pd.DataFrame([{"Descripción": "Total transferencias entrantes", "Monto": total_transf_acumulado}])
+        dibujar_tabla("TRANSFERENCIAS (Entrantes)", df_transf_resumida)
     dibujar_tabla("GASTOS VARIOS / SALIDAS", df_salidas) 
     dibujar_tabla("VALES / FIADOS", df_vales) 
-    dibujar_tabla("ERRORES DE FACTURACIÓN", df_errores, label_fijo="Error de Facturación")  
+    # --- REEMPLÁZALA POR ESTO ---
+    if not df_errores.empty and df_errores['Monto'].sum() > 0:
+        total_err_acumulado = df_errores['Monto'].sum()
+        # Creamos un pequeño DataFrame temporal de un solo renglón
+        df_err_resumido = pd.DataFrame([{"Descripción": "Total errores de facturación registrados", "Monto": total_err_acumulado}])
+        dibujar_tabla("ERRORES DE FACTURACIÓN", df_err_resumido) 
     # Resumimos todos los descuentos en un solo renglón para no ocupar espacio
     if not df_descuentos.empty and df_descuentos['Monto'].sum() > 0:
         total_desc = df_descuentos['Monto'].sum()
