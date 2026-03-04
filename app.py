@@ -195,9 +195,9 @@ st.markdown("---")
 # --- NUEVA FUNCIONALIDAD: CALCULADORA DE PROMOS (Lunes y Miércoles) ---
 es_dia_promo = fecha_input.weekday() in [0, 2] # 0=Lunes, 2=Miércoles
 if es_dia_promo:
-    st.info("💡 Hoy es día de Promoción (10% / 15%)")
-    with st.popover("🧮 Calculadora de Promociones"):
-        st.write("Anotá los importes de los productos para sumar todo automáticamente:")
+    st.info("Hoy hay Somos Avellaneda (10% / 15%)")
+    with st.popover("Somos Avellaneda"):
+        st.write("Importes de los productos:")
         
         c_dto, s_dto = st.columns(2)
         
@@ -219,10 +219,10 @@ if es_dia_promo:
         calculo_descuento = monto_con_dto * tipo_dto
         total_a_cobrar = (monto_con_dto - calculo_descuento) + monto_sin_dto
         
-        st.markdown(f"### Cobrar al cliente: **${total_a_cobrar:,.2f}**")
-        st.caption(f"Se bonificaron: ${calculo_descuento:,.2f}")
+        st.markdown(f"### Cobrar: **${total_a_cobrar:,.2f}**")
+        st.caption(f"Descuento: ${calculo_descuento:,.2f}")
         
-        if st.button("Cobrar y sumar a la caja", use_container_width=True):
+        if st.button("Agregar descuento a la caja", use_container_width=True):
             if calculo_descuento > 0:
                 # Guardamos el descuento en la tabla de errores
                 nueva_fila = pd.DataFrame([{"Descripción": f"Promo {int(tipo_dto*100)}% Tarjeta", "Monto": calculo_descuento}])
