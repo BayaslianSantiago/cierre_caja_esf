@@ -296,13 +296,33 @@ c1, c2, c3 = st.columns(3)
 c1.metric("Diferencia", f"${diferencia:,.2f}", delta_color="inverse" if diferencia > 0 else "normal") 
 
 if c2.button("Guardar en Drive", use_container_width=True): 
+    # Calculamos el Estado de la caja para enviarlo al Excel
+    if diferencia == 0:
+        estado_caja = "OK"
+    elif diferencia > 0:
+        estado_caja = "FALTANTE"
+    else:
+        estado_caja = "SOBRANTE"
+
+    # Agregamos todos los campos que espera tu Google Sheets
     datos = { 
-        "Fecha": fecha_input.strftime("%d/%m/%Y"), "Cajero": cajero, "Balanza": balanza_total, 
-        "Digital": total_digital, "Efectivo": efectivo_neto, "Diferencia": diferencia 
+        "Fecha": fecha_input.strftime("%d/%m/%Y"), 
+        "Cajero": cajero, 
+        "Balanza": balanza_total, 
+        "Digital": total_digital, 
+        "Efectivo": efectivo_neto, 
+        "Transferencias": total_transf_in,
+        "Salidas": total_salidas,
+        "Vales": total_vales,
+        "Errores": total_errores,
+        "Descuentos": 0.0,  # Lo dejamos en 0.0 o puedes poner otra variable si tienes una específica para esto
+        "Diferencia": diferencia,
+        "Estado": estado_caja
     } 
+    
     if guardar_todo_en_nube(datos, df_proveedores, df_empleados): 
         st.success("Guardado exitoso") 
-        st.balloons() 
+        st.balloons()
 
 if c3.button("Generar PDF", use_container_width=True): 
     desglose = {"MP": mp, "Nave": nave, "Clover": clover, "BBVA": bbva} 
