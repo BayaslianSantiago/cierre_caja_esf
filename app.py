@@ -78,7 +78,7 @@ session_keys = {
     'df_salidas': ["Descripción", "Monto"], 
     'df_transferencias': ["Monto"], 
     'df_vales': ["Descripción", "Monto"], 
-    'df_errores': ["Descripción", "Monto"], 
+    'df_errores': ["Monto"], 
     'df_descuentos': ["Descripción", "Monto"], 
     'df_proveedores': ["Proveedor", "Forma Pago", "Nro Factura", "Monto"], 
     'df_empleados': ["Empleado", "Monto"], 
@@ -172,7 +172,7 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
     dibujar_tabla("TRANSFERENCIAS (Entrantes)", df_transferencias, label_fijo="Transferencia") 
     dibujar_tabla("GASTOS VARIOS / SALIDAS", df_salidas) 
     dibujar_tabla("VALES / FIADOS", df_vales) 
-    dibujar_tabla("ERRORES DE FACTURACIÓN", df_errores)  
+    dibujar_tabla("ERRORES DE FACTURACIÓN", df_errores, label_fijo="Error de Facturación")  
     # Resumimos todos los descuentos en un solo renglón para no ocupar espacio
     if not df_descuentos.empty and df_descuentos['Monto'].sum() > 0:
         total_desc = df_descuentos['Monto'].sum()
@@ -264,7 +264,7 @@ if es_dia_promo:
 df_vales, total_vales = input_tabla("Vales / Fiados", "df_vales") 
 df_transferencias, total_transf_in = input_tabla("Transferencias (Entrantes)", "df_transferencias", solo_monto=True) 
 
-df_errores, total_errores = input_tabla("Errores de Facturación", "df_errores") 
+df_errores, total_errores = input_tabla("Errores de Facturación", "df_errores", solo_monto=True) 
 
 # Descuentos tiene un tratamiento especial para poder mezclarse con la calculadora sin romperse
 df_descuentos, total_descuentos = input_tabla("Descuentos Promocionales", "df_descuentos") 
