@@ -81,7 +81,9 @@ session_keys = {
     'df_errores': ["Descripción", "Monto"],
     'df_descuentos': ["Monto"],
     'df_proveedores': ["Proveedor", "Forma Pago", "Nro Factura", "Monto"],
-    'df_empleados': ["Empleado", "Monto"]
+    'df_empleados': ["Empleado", "Monto"],
+    'df_calc_con': ["Monto"], # NUEVO: Para la calculadora
+    'df_calc_sin': ["Monto"]  # NUEVO: Para la calculadora
 }
 
 for key, cols in session_keys.items():
@@ -190,29 +192,52 @@ with col_enc1: fecha_input = st.date_input("Fecha", datetime.today())
 with col_enc2: cajero = st.selectbox("Cajero de Turno", lista_cajeros)
 st.markdown("---")
 
-# NUEVA FUNCIONALIDAD: CALCULADORA DE PROMOS (Lunes y Miércoles)
+# --- NUEVA FUNCIONALIDAD: CALCULADORA DE PROMOS (Lunes y Miércoles) ---
 es_dia_promo = fecha_input.weekday() in [0, 2] # 0=Lunes, 2=Miércoles
 if es_dia_promo:
     st.info("💡 Hoy es día de Promoción (10% / 15%)")
     with st.popover("🧮 Calculadora de Promociones"):
-        st.subheader("Cálculo de Descuento")
-        monto_con_dto = st.number_input("Productos CON Descuento ($)", min_value=0.0, step=100.0)
-        monto_sin_dto = st.number_input("Productos SIN Descuento ($)", min_value=0.0, step=100.0)
+        st.write("Anotá los importes de los productos para sumar todo automáticamente:")
+        
+        c_dto, s_dto = st.columns(2)
+        
+        with c_dto:
+            st.markdown("**CON Descuento**")
+            df_calc_con = st.data_editor(st.session_state['df_calc_con'], column_config={"Monto": st.column_config.NumberColumn("Importe ($)", min_value=0.0)}, num_rows="dynamic", key="calc_con", use_container_width=True)
+            monto_con_dto = df_calc_con["Monto"].sum() if not df_calc_con.empty else 0.0
+            st.caption(f"Subtotal: ${monto_con_dto:,.2f}")
+
+        with s_dto:
+            st.markdown("**SIN Descuento**")
+            df_calc_sin = st.data_editor(st.session_state['df_calc_sin'], column_config={"Monto": st.column_config.NumberColumn("Importe ($)", min_value=0.0)}, num_rows="dynamic", key="calc_sin", use_container_width=True)
+            monto_sin_dto = df_calc_sin["Monto"].sum() if not df_calc_sin.empty else 0.0
+            st.caption(f"Subtotal: ${monto_sin_dto:,.2f}")
+
+        st.markdown("---")
         tipo_dto = st.radio("Porcentaje de Tarjeta", [0.10, 0.15], format_func=lambda x: f"{int(x*100)}%", horizontal=True)
         
         calculo_descuento = monto_con_dto * tipo_dto
         total_a_cobrar = (monto_con_dto - calculo_descuento) + monto_sin_dto
         
         st.markdown(f"### Cobrar al cliente: **${total_a_cobrar:,.2f}**")
-        st.caption(f"Ahorro cliente: ${calculo_descuento:,.2f}")
+        st.caption(f"Se bonificaron: ${calculo_descuento:,.2f}")
         
-        if st.button("Aplicar descuento al Cierre"):
-            nueva_fila = pd.DataFrame([{"Descripción": f"Promo {int(tipo_dto*100)}% Tarjeta", "Monto": calculo_descuento}])
-            st.session_state.df_errores = pd.concat([st.session_state.df_errores, nueva_fila], ignore_index=True)
-            st.success("Descuento sumado a la planilla de errores.")
-            st.rerun()
+        if st.button("Cobrar y sumar a la caja", use_container_width=True):
+            if calculo_descuento > 0:
+                # Guardamos el descuento en la tabla de errores
+                nueva_fila = pd.DataFrame([{"Descripción": f"Promo {int(tipo_dto*100)}% Tarjeta", "Monto": calculo_descuento}])
+                st.session_state.df_errores = pd.concat([st.session_state.df_errores, nueva_fila], ignore_index=True)
+                
+                # Vaciamos la calculadora para el próximo cliente
+                st.session_state['df_calc_con'] = pd.DataFrame(columns=["Monto"])
+                st.session_state['df_calc_sin'] = pd.DataFrame(columns=["Monto"])
+                
+                st.success("Cobro registrado. Calculadora limpia para el próximo cliente.")
+                st.rerun()
+            else:
+                st.warning("No hay importes con descuento para aplicar.")
 
-# RESTO DE TABLAS
+# --- RESTO DE TABLAS ---
 df_vales, total_vales = input_tabla("Vales / Fiados", "df_vales")
 df_transferencias, total_transf_in = input_tabla("Transferencias (Entrantes)", "df_transferencias", solo_monto=True)
 df_errores, total_errores = input_tabla("Errores / Descuentos Promos", "df_errores")
