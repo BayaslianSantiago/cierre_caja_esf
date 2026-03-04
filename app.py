@@ -60,8 +60,6 @@ except:
 
 # --- 2. CARGA DE DATOS MAESTROS ---
 lista_proveedores = ["Pan Rustico", "Pan Fresh", "Dharma", "ValMaira", "Aprea", "CocaCola", "Grenn&Co", "Basile Walter", "Otro"]
-
-# MODIFICACIÓN 1: Separamos los cajeros de los empleados generales
 lista_cajeros = ["Leandro", "Natalia", "Santiago"]
 lista_empleados = ["Leandro", "Natalia", "Santiago", "Julieta", "Mariela", "Fernanda", "Brian", "Erika", "Oriana"]
 
@@ -80,7 +78,7 @@ session_keys = {
     'df_salidas': ["Descripción", "Monto"],
     'df_transferencias': ["Monto"],
     'df_vales': ["Descripción", "Monto"],
-    'df_errores': ["Descripción", "Monto"], # MODIFICACIÓN 2: Agregamos "Descripción" para los errores
+    'df_errores': ["Descripción", "Monto"],
     'df_descuentos': ["Monto"],
     'df_proveedores': ["Proveedor", "Forma Pago", "Nro Factura", "Monto"],
     'df_empleados': ["Empleado", "Monto"]
@@ -93,13 +91,11 @@ for key, cols in session_keys.items():
 # --- 4. FUNCIONES DE GUARDADO ---
 def guardar_todo_en_nube(datos_cierre, df_provs, df_empls):
     try:
-        # A. Historial General
         df_historial = conn.read(worksheet="Historial")
         fila_cierre = pd.DataFrame([datos_cierre])
         df_historial_upd = pd.concat([df_historial, fila_cierre], ignore_index=True).fillna("")
         conn.update(worksheet="Historial", data=df_historial_upd)
         
-        # B. Proveedores
         pagos_reales = df_provs[df_provs["Monto"] > 0].copy()
         if not pagos_reales.empty:
             pagos_reales["Fecha"] = datos_cierre["Fecha"]
@@ -108,7 +104,6 @@ def guardar_todo_en_nube(datos_cierre, df_provs, df_empls):
             df_pagos_upd = pd.concat([df_pagos_ant, pagos_reales], ignore_index=True).fillna("")
             conn.update(worksheet="Pagos_Proveedores", data=df_pagos_upd)
 
-        # C. Mercadería Empleados (Nueva Hoja)
         consumos_empl = df_empls[df_empls["Monto"] > 0].copy()
         if not consumos_empl.empty:
             consumos_empl["Fecha"] = datos_cierre["Fecha"]
@@ -143,7 +138,6 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
     pdf.set_x(130); pdf.cell(60, 6, f"CAJERO: {cajero}", ln=1, align='R')
     pdf.ln(15); pdf.line(15, pdf.get_y(), 195, pdf.get_y()); pdf.ln(3)
 
-    # KPIs
     def dibujar_kpi(titulo, monto):
         pdf.set_fill_color(240, 240, 240); pdf.set_font("Arial", 'B', 12)
         pdf.cell(0, 10, f"{titulo}: $ {monto:,.2f}", ln=1, align='C', fill=True, border=1)
@@ -157,7 +151,6 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
     pdf.cell(0, 6, f"Ticket Fiscal (Z): $ {registradora:,.2f}", border=0, align='C', ln=1)
     pdf.ln(5)
 
-    # TABLAS GENÉRICAS
     def dibujar_tabla(titulo, df, label_fijo=None):
         if df.empty or df['Monto'].sum() == 0: return
         pdf.set_font("Arial", 'B', 10); pdf.set_fill_color(240, 240, 240)
@@ -172,9 +165,8 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
     dibujar_tabla("TRANSFERENCIAS (Entrantes)", df_transferencias, label_fijo="Transferencia")
     dibujar_tabla("GASTOS VARIOS / SALIDAS", df_salidas)
     dibujar_tabla("VALES / FIADOS", df_vales)
-    dibujar_tabla("ERRORES DE FACTURACIÓN", df_errores) # MODIFICACIÓN 4: Añadido al PDF
+    dibujar_tabla("PROMOS / ERRORES FACTURACIÓN", df_errores) 
     
-    # Diferencia Final
     pdf.ln(5)
     estado, color_texto = ("FALTANTE", (200, 0, 0)) if diferencia > 0 else ("SOBRANTE", (0, 100, 0))
     if diferencia == 0: estado, color_texto = ("OK", (0, 0, 0))
@@ -193,20 +185,39 @@ def input_tabla(titulo, key, solo_monto=False):
 
 st.title("Estancia San Francisco")
 
-# 1. FECHA Y CAJERO
 col_enc1, col_enc2 = st.columns(2)
 with col_enc1: fecha_input = st.date_input("Fecha", datetime.today())
-with col_enc2: cajero = st.selectbox("Cajero de Turno", lista_cajeros) # MODIFICACIÓN 1: Usa lista_cajeros
+with col_enc2: cajero = st.selectbox("Cajero de Turno", lista_cajeros)
 st.markdown("---")
 
-# 2. SECCIONES DE CARGA
+# NUEVA FUNCIONALIDAD: CALCULADORA DE PROMOS (Lunes y Miércoles)
+es_dia_promo = fecha_input.weekday() in [0, 2] # 0=Lunes, 2=Miércoles
+if es_dia_promo:
+    st.info("💡 Hoy es día de Promoción (10% / 15%)")
+    with st.popover("🧮 Calculadora de Promociones"):
+        st.subheader("Cálculo de Descuento")
+        monto_con_dto = st.number_input("Productos CON Descuento ($)", min_value=0.0, step=100.0)
+        monto_sin_dto = st.number_input("Productos SIN Descuento ($)", min_value=0.0, step=100.0)
+        tipo_dto = st.radio("Porcentaje de Tarjeta", [0.10, 0.15], format_func=lambda x: f"{int(x*100)}%", horizontal=True)
+        
+        calculo_descuento = monto_con_dto * tipo_dto
+        total_a_cobrar = (monto_con_dto - calculo_descuento) + monto_sin_dto
+        
+        st.markdown(f"### Cobrar al cliente: **${total_a_cobrar:,.2f}**")
+        st.caption(f"Ahorro cliente: ${calculo_descuento:,.2f}")
+        
+        if st.button("Aplicar descuento al Cierre"):
+            nueva_fila = pd.DataFrame([{"Descripción": f"Promo {int(tipo_dto*100)}% Tarjeta", "Monto": calculo_descuento}])
+            st.session_state.df_errores = pd.concat([st.session_state.df_errores, nueva_fila], ignore_index=True)
+            st.success("Descuento sumado a la planilla de errores.")
+            st.rerun()
+
+# RESTO DE TABLAS
 df_vales, total_vales = input_tabla("Vales / Fiados", "df_vales")
 df_transferencias, total_transf_in = input_tabla("Transferencias (Entrantes)", "df_transferencias", solo_monto=True)
+df_errores, total_errores = input_tabla("Errores / Descuentos Promos", "df_errores")
 
-# MODIFICACIÓN 3: Agregamos la tabla de errores a la vista
-df_errores, total_errores = input_tabla("Errores de Facturación (Tickets sin ingreso)", "df_errores")
-
-# 3. MERCADERÍA EMPLEADOS
+# MERCADERÍA EMPLEADOS
 st.markdown("**Mercadería de Empleados**")
 cfg_emp = {
     "Empleado": st.column_config.SelectboxColumn("Empleado", options=lista_empleados, required=True),
@@ -214,10 +225,9 @@ cfg_emp = {
 }
 df_empleados = st.data_editor(st.session_state.df_empleados, column_config=cfg_emp, num_rows="dynamic", use_container_width=True, key="ed_emp")
 total_empleados = df_empleados["Monto"].sum()
-st.caption(f"Total Empleados: ${total_empleados:,.2f}")
 st.markdown("---")
 
-# 4. EFECTIVO Y DIGITAL
+# EFECTIVO Y DIGITAL
 col_core1, col_core2 = st.columns(2)
 with col_core1: 
     balanza_total = st.number_input("Total Balanza (Venta Real)", 0.0, step=100.0)
@@ -231,15 +241,12 @@ with col_core2:
 
 st.markdown("**Cobros Digitales**")
 cd1, cd2, cd3, cd4 = st.columns(4)
-mp = cd1.number_input("Mercado Pago", 0.0)
-nave = cd2.number_input("Nave", 0.0)
-clover = cd3.number_input("Clover", 0.0)
-bbva = cd4.number_input("BBVA", 0.0)
+mp = cd1.number_input("Mercado Pago", 0.0); nave = cd2.number_input("Nave", 0.0)
+clover = cd3.number_input("Clover", 0.0); bbva = cd4.number_input("BBVA", 0.0)
 total_digital = mp + nave + clover + bbva
-
 st.markdown("---")
 
-# 5. PROVEEDORES Y SALIDAS
+# PROVEEDORES Y SALIDAS
 st.markdown("**Pago a Proveedores**")
 cfg_prov = {
     "Proveedor": st.column_config.SelectboxColumn("Proveedor", options=lista_proveedores, required=True),
@@ -248,12 +255,10 @@ cfg_prov = {
 }
 df_proveedores = st.data_editor(st.session_state.df_proveedores, column_config=cfg_prov, num_rows="dynamic", use_container_width=True, key="ed_prov")
 total_prov_efectivo = df_proveedores[df_proveedores["Forma Pago"] == "Efectivo"]["Monto"].sum()
-
 df_salidas, total_salidas = input_tabla("Gastos Varios (Salidas de Caja)", "df_salidas")
 
 # --- 7. RESULTADO FINAL ---
 st.markdown("### Resultado del Cierre")
-# MODIFICACIÓN 5: Sumamos total_errores al dinero justificado para que compense lo que pide la balanza
 total_justificado = total_digital + efectivo_neto + total_transf_in + total_salidas + total_prov_efectivo + total_vales + total_empleados + total_errores
 diferencia = balanza_total - total_justificado
 
@@ -271,7 +276,6 @@ if c2.button("Guardar en Drive", use_container_width=True):
 
 if c3.button("Generar PDF", use_container_width=True):
     desglose = {"MP": mp, "Nave": nave, "Clover": clover, "BBVA": bbva}
-    # MODIFICACIÓN 6: Pasamos df_errores real a la función de PDF
     pdf_bytes = generar_pdf_profesional(fecha_input, cajero, balanza_total, registradora_total, 
                                        total_digital, efectivo_neto, df_salidas, df_transferencias, 
                                        df_errores, df_vales, pd.DataFrame(), df_proveedores, 
