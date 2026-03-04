@@ -212,19 +212,19 @@ if es_dia_promo:
     with st.popover("Somos Avellaneda"): 
         st.write("Ingrese los valores de los importes de los productos para el descuento:                                           ") 
          
-        c_dto, s_dto = st.columns(2) 
-         
-        with c_dto: 
-            st.markdown("**CON Descuento**") 
-            df_calc_con = st.data_editor(st.session_state['df_calc_con'], column_config={"Monto": st.column_config.NumberColumn("Importe ($)", min_value=0.0)}, num_rows="dynamic", key="calc_con", use_container_width=True, hide_index=True) 
-            monto_con_dto = df_calc_con["Monto"].sum() if not df_calc_con.empty else 0.0 
-            st.caption(f"Subtotal: ${monto_con_dto:,.2f}") 
+        s_dto, c_dto = st.columns(2) 
 
         with s_dto: 
             st.markdown("**SIN Descuento**") 
             df_calc_sin = st.data_editor(st.session_state['df_calc_sin'], column_config={"Monto": st.column_config.NumberColumn("Importe ($)", min_value=0.0)}, num_rows="dynamic", key="calc_sin", use_container_width=True, hide_index=True) 
             monto_sin_dto = df_calc_sin["Monto"].sum() if not df_calc_sin.empty else 0.0 
             st.caption(f"Subtotal: ${monto_sin_dto:,.2f}") 
+        
+        with c_dto: 
+            st.markdown("**CON Descuento**") 
+            df_calc_con = st.data_editor(st.session_state['df_calc_con'], column_config={"Monto": st.column_config.NumberColumn("Importe ($)", min_value=0.0)}, num_rows="dynamic", key="calc_con", use_container_width=True, hide_index=True) 
+            monto_con_dto = df_calc_con["Monto"].sum() if not df_calc_con.empty else 0.0 
+            st.caption(f"Subtotal: ${monto_con_dto:,.2f}") 
 
         st.markdown("---") 
         tipo_dto = st.radio("Porcentaje de Tarjeta", [0.10, 0.15], format_func=lambda x: f"{int(x*100)}%", horizontal=True) 
