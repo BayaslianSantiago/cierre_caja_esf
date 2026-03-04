@@ -189,7 +189,7 @@ def input_tabla(titulo, key, solo_monto=False):
     cfg = {"Monto": st.column_config.NumberColumn("($)", format="$%d", min_value=0)} 
     if not solo_monto: cfg["Descripción"] = st.column_config.TextColumn("Detalle", required=True) 
 
-    df = st.data_editor(st.session_state[key], column_config=cfg, num_rows="dynamic", use_container_width=True, key=f"ed_{key}") 
+    df = st.data_editor(st.session_state[key], column_config=cfg, num_rows="dynamic", use_container_width=True, key=f"ed_{key}", hide_index=True) 
     
     # Guarda las ediciones manuales en la memoria global
     st.session_state[key] = df 
@@ -214,13 +214,13 @@ if es_dia_promo:
          
         with c_dto: 
             st.markdown("**CON Descuento**") 
-            df_calc_con = st.data_editor(st.session_state['df_calc_con'], column_config={"Monto": st.column_config.NumberColumn("Importe ($)", min_value=0.0)}, num_rows="dynamic", key="calc_con", use_container_width=True) 
+            df_calc_con = st.data_editor(st.session_state['df_calc_con'], column_config={"Monto": st.column_config.NumberColumn("Importe ($)", min_value=0.0)}, num_rows="dynamic", key="calc_con", use_container_width=True, hide_index=True) 
             monto_con_dto = df_calc_con["Monto"].sum() if not df_calc_con.empty else 0.0 
             st.caption(f"Subtotal: ${monto_con_dto:,.2f}") 
 
         with s_dto: 
             st.markdown("**SIN Descuento**") 
-            df_calc_sin = st.data_editor(st.session_state['df_calc_sin'], column_config={"Monto": st.column_config.NumberColumn("Importe ($)", min_value=0.0)}, num_rows="dynamic", key="calc_sin", use_container_width=True) 
+            df_calc_sin = st.data_editor(st.session_state['df_calc_sin'], column_config={"Monto": st.column_config.NumberColumn("Importe ($)", min_value=0.0)}, num_rows="dynamic", key="calc_sin", use_container_width=True, hide_index=True) 
             monto_sin_dto = df_calc_sin["Monto"].sum() if not df_calc_sin.empty else 0.0 
             st.caption(f"Subtotal: ${monto_sin_dto:,.2f}") 
 
@@ -267,7 +267,7 @@ cfg_emp = {
     "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0) 
 } 
 
-df_empleados = st.data_editor(st.session_state.df_empleados, column_config=cfg_emp, num_rows="dynamic", use_container_width=True, key="ed_emp") 
+df_empleados = st.data_editor(st.session_state.df_empleados, column_config=cfg_emp, num_rows="dynamic", use_container_width=True, key="ed_emp", hide_index=True) 
 # Guardamos las ediciones manuales en memoria global
 st.session_state.df_empleados = df_empleados 
 total_empleados = df_empleados["Monto"].sum() 
@@ -300,7 +300,7 @@ cfg_prov = {
     "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0) 
 } 
 
-df_proveedores = st.data_editor(st.session_state.df_proveedores, column_config=cfg_prov, num_rows="dynamic", use_container_width=True, key="ed_prov") 
+df_proveedores = st.data_editor(st.session_state.df_proveedores, column_config=cfg_prov, num_rows="dynamic", use_container_width=True, key="ed_prov", hide_index=True) 
 # Guardamos las ediciones manuales en memoria global
 st.session_state.df_proveedores = df_proveedores
 total_prov_efectivo = df_proveedores[df_proveedores["Forma Pago"] == "Efectivo"]["Monto"].sum() 
