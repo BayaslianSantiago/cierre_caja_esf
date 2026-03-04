@@ -231,8 +231,10 @@ if es_dia_promo:
          
         calculo_descuento = monto_con_dto * tipo_dto 
         total_a_cobrar = (monto_con_dto - calculo_descuento) + monto_sin_dto 
-         
-        st.markdown(f"### Cobrar: **${total_a_cobrar:,.2f}**") 
+        ticket_sin_descuento = monto_con_dto + monto_sin_dto
+        
+        st.markdown(f"### Ticket Sin Descuento: **${ticket_sin_descuento}**")
+        st.markdown(f"### Cobrar: **${total_a_cobrar:,.2f}**")
         st.caption(f"Descuento: ${calculo_descuento:,.2f}") 
          
         if st.button("Agregar descuento a la caja", use_container_width=True): 
