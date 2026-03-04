@@ -79,7 +79,7 @@ session_keys = {
     'df_transferencias': ["Monto"], 
     'df_vales': ["Descripción", "Monto"], 
     'df_errores': ["Descripción", "Monto"], 
-    'df_descuentos': ["Descripción", "Monto"], # Ajustado para descripciones manuales
+    'df_descuentos': ["Descripción", "Monto"], 
     'df_proveedores': ["Proveedor", "Forma Pago", "Nro Factura", "Monto"], 
     'df_empleados': ["Empleado", "Monto"], 
     'df_calc_con': ["Monto"], 
@@ -189,10 +189,8 @@ def input_tabla(titulo, key, solo_monto=False):
     cfg = {"Monto": st.column_config.NumberColumn("($)", format="$%d", min_value=0)} 
     if not solo_monto: cfg["Descripción"] = st.column_config.TextColumn("Detalle", required=True) 
 
+    # Al no reescribir manualmente st.session_state[key], Streamlit deja de robar el foco
     df = st.data_editor(st.session_state[key], column_config=cfg, num_rows="dynamic", use_container_width=True, key=f"ed_{key}", hide_index=True) 
-    
-    # Guarda las ediciones manuales en la memoria global
-    st.session_state[key] = df 
     
     return df, (df["Monto"].sum() if not df.empty else 0.0) 
 
@@ -235,15 +233,18 @@ if es_dia_promo:
          
         if st.button("Agregar descuento a la caja", use_container_width=True): 
             if calculo_descuento > 0: 
-                # Guardamos el descuento en la tabla de DESCUENTOS
+                # Tomamos la tabla de descuentos más reciente (que incluye las ediciones manuales)
+                base_df = st.session_state.get("latest_df_descuentos", st.session_state.df_descuentos)
+                
+                # Le pegamos el nuevo cálculo
                 nueva_fila = pd.DataFrame([{"Descripción": f"Promo {int(tipo_dto*100)}% Tarjeta", "Monto": calculo_descuento}]) 
-                st.session_state.df_descuentos = pd.concat([st.session_state.df_descuentos, nueva_fila], ignore_index=True) 
+                st.session_state.df_descuentos = pd.concat([base_df, nueva_fila], ignore_index=True) 
                  
                 # Vaciamos la calculadora para el próximo cliente 
                 st.session_state['df_calc_con'] = pd.DataFrame(columns=["Monto"]) 
                 st.session_state['df_calc_sin'] = pd.DataFrame(columns=["Monto"]) 
                 
-                # Borramos el estado interno de los widgets
+                # Limpiamos los widgets gráficos para que se re-dibujen correctamente
                 for widget_key in ["calc_con", "calc_sin", "ed_df_descuentos"]:
                     if widget_key in st.session_state:
                         del st.session_state[widget_key]
@@ -258,7 +259,10 @@ df_vales, total_vales = input_tabla("Vales / Fiados", "df_vales")
 df_transferencias, total_transf_in = input_tabla("Transferencias (Entrantes)", "df_transferencias", solo_monto=True) 
 
 df_errores, total_errores = input_tabla("Errores de Facturación", "df_errores") 
+
+# Descuentos tiene un tratamiento especial para poder mezclarse con la calculadora sin romperse
 df_descuentos, total_descuentos = input_tabla("Descuentos Promocionales", "df_descuentos") 
+st.session_state["latest_df_descuentos"] = df_descuentos
 
 # MERCADERÍA EMPLEADOS 
 st.markdown("**Mercadería de Empleados**") 
@@ -268,8 +272,6 @@ cfg_emp = {
 } 
 
 df_empleados = st.data_editor(st.session_state.df_empleados, column_config=cfg_emp, num_rows="dynamic", use_container_width=True, key="ed_emp", hide_index=True) 
-# Guardamos las ediciones manuales en memoria global
-st.session_state.df_empleados = df_empleados 
 total_empleados = df_empleados["Monto"].sum() 
 st.markdown("---") 
 
@@ -301,8 +303,6 @@ cfg_prov = {
 } 
 
 df_proveedores = st.data_editor(st.session_state.df_proveedores, column_config=cfg_prov, num_rows="dynamic", use_container_width=True, key="ed_prov", hide_index=True) 
-# Guardamos las ediciones manuales en memoria global
-st.session_state.df_proveedores = df_proveedores
 total_prov_efectivo = df_proveedores[df_proveedores["Forma Pago"] == "Efectivo"]["Monto"].sum() 
 
 df_salidas, total_salidas = input_tabla("Gastos Varios (Salidas de Caja)", "df_salidas") 
