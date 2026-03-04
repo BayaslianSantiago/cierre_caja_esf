@@ -160,10 +160,16 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
         pdf.cell(180, 6, f"  {titulo} (Total: $ {df['Monto'].sum():,.2f})", ln=1, fill=True); pdf.set_font("Arial", '', 9) 
         for _, row in df.iterrows(): 
             if row['Monto'] > 0: 
-                txt = str(row.get('Descripción', row.get('Empleado', label_fijo))) 
+                # Lógica adaptada para que reconozca a los proveedores
+                if 'Proveedor' in df.columns:
+                    txt = f"{row['Proveedor']} ({row['Forma Pago']})"
+                else:
+                    txt = str(row.get('Descripción', row.get('Empleado', label_fijo))) 
+                
                 pdf.cell(130, 5, f"      - {txt}"); pdf.cell(40, 5, f"$ {row['Monto']:,.2f}", align='R', ln=1) 
         pdf.ln(2) 
 
+    dibujar_tabla("PAGO A PROVEEDORES", df_proveedores) # <--- ACÁ AGREGAMOS LOS PROVEEDORES
     dibujar_tabla("MERCADERÍA EMPLEADOS", df_empleados) 
     dibujar_tabla("TRANSFERENCIAS (Entrantes)", df_transferencias, label_fijo="Transferencia") 
     dibujar_tabla("GASTOS VARIOS / SALIDAS", df_salidas) 
@@ -176,7 +182,7 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
     pdf.set_font("Arial", 'B', 16); pdf.set_text_color(*color_texto) 
     pdf.cell(0, 14, f"CAJA REAL: $ {diferencia:,.2f} ({estado})", ln=1, align='C', border=1) 
      
-    return pdf.output(dest="S").encode("latin-1") 
+    return pdf.output(dest="S").encode("latin-1")
 
 # --- 6. INTERFAZ UI --- 
 def input_tabla(titulo, key, solo_monto=False): 
