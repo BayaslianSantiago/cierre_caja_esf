@@ -227,7 +227,7 @@ if es_dia_promo:
         if st.button("Agregar descuento a la caja", use_container_width=True): 
             if calculo_descuento > 0: 
                 # Guardamos el descuento en la tabla de errores 
-                nueva_fila = pd.DataFrame([{"Descripción": f"Promo {int(tipo_dto*100)}% Tarjeta", "Monto": calculo_descuento}]) 
+                nueva_fila = pd.DataFrame([{"Descripción": f"Promo {int(tipo_dto*100)}% Tarjeta Somos A", "Monto": calculo_descuento}]) 
                 st.session_state.df_errores = pd.concat([st.session_state.df_errores, nueva_fila], ignore_index=True) 
                  
                 # Vaciamos la calculadora para el próximo cliente 
