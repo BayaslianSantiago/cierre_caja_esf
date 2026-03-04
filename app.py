@@ -315,7 +315,7 @@ if c2.button("Guardar en Drive", use_container_width=True):
         "Salidas": total_salidas,
         "Vales": total_vales,
         "Errores": total_errores,
-        "Descuentos": 0.0,  # Lo dejamos en 0.0 o puedes poner otra variable si tienes una específica para esto
+        "Proveedores": total_prov_efectivo,  # <-- Reemplazamos Descuentos por Proveedores
         "Diferencia": diferencia,
         "Estado": estado_caja
     } 
