@@ -81,7 +81,7 @@ session_keys = {
     'df_errores': ["Monto"], 
     'df_descuentos': ["Descripción", "Monto"], 
     'df_proveedores': ["Proveedor", "Forma Pago", "Nro Factura", "Monto"], 
-    'df_empleados': ["Empleado", "Monto"], 
+    'df_empleados': ["Empleado", "Ticket", "Monto"], 
     'df_calc_con': ["Monto"], 
     'df_calc_sin': ["Monto"]  
 } 
@@ -283,12 +283,19 @@ st.session_state["latest_df_descuentos"] = df_descuentos
 st.markdown("**Mercadería de Empleados**") 
 cfg_emp = { 
     "Empleado": st.column_config.SelectboxColumn("Empleado", options=lista_empleados, required=True), 
+    "Ticket": st.column_config.SelectboxColumn("Tipo", options=["Con Ticket", "Sin Ticket"], required=True),
     "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0) 
 } 
 
 df_empleados = st.data_editor(st.session_state.df_empleados, column_config=cfg_emp, num_rows="dynamic", use_container_width=True, key="ed_emp", hide_index=True) 
-total_empleados = df_empleados["Monto"].sum() 
-st.markdown("---") 
+
+# LÓGICA: Solo sumamos a la caja los que son "Con Ticket"
+if not df_empleados.empty and "Ticket" in df_empleados.columns:
+    total_empleados = df_empleados[df_empleados["Ticket"] == "Con Ticket"]["Monto"].sum()
+else:
+    total_empleados = df_empleados["Monto"].sum() if not df_empleados.empty else 0.0
+
+st.markdown("---")
 
 # EFECTIVO Y DIGITAL 
 col_core1, col_core2 = st.columns(2) 
