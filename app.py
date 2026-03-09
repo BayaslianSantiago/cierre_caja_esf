@@ -5,7 +5,7 @@ from fpdf import FPDF
 import os 
 from streamlit_gsheets import GSheetsConnection 
 import streamlit.components.v1 as components 
-import plotly.express as px  # <-- NUEVA LIBRERÍA PARA EL GRÁFICO DE TORTA
+import plotly.express as px  
 
 # --- 1. CONFIGURACIÓN Y LOGIN --- 
 st.set_page_config(page_title="Cierre de Caja - Estancia San Francisco", layout="centered", initial_sidebar_state="collapsed") 
@@ -57,9 +57,25 @@ try:
 except: 
     st.error("Error de conexión con Google Sheets") 
 
-# --- SIDEBAR DE ANÁLISIS MENSUAL ACTUALIZADO ---
+# --- 2. CARGA DE DATOS MAESTROS (Movido arriba para usarlo en la sidebar) --- 
+lista_proveedores = ["Pan Rustico", "Pan Fresh", "Dharma", "ValMaira", "Aprea", "CocaCola", "Grenn&Co", "Basile Walter", "Otro"] 
+lista_cajeros = ["Leandro", "Natalia", "Santiago"] 
+lista_empleados = ["Leandro", "Natalia", "Santiago", "Julieta", "Mariela", "Fernanda", "Brian", "Erika", "Oriana"] 
+
+df_directorio = pd.DataFrame() 
+if 'conn' in globals(): 
+    try: 
+        # Asegurate de que la hoja en tu Google Sheets se llame "Directorio" o cambiá este nombre
+        df_directorio = conn.read(worksheet="Directorio", ttl=600) 
+        if not df_directorio.empty and "Proveedor" in df_directorio.columns: 
+            lista_proveedores = df_directorio["Proveedor"].dropna().unique().tolist() 
+            if "Otro" not in lista_proveedores: lista_proveedores.append("Otro") 
+    except: 
+        pass 
+
+# --- SIDEBAR DE ANÁLISIS MENSUAL Y GLOSARIO ---
 with st.sidebar:
-    st.title("📊 Análisis de Cierres")
+    st.title("Análisis de Cierres")
     
     if 'conn' in globals():
         try:
@@ -70,7 +86,7 @@ with st.sidebar:
             try:
                 df_empleados_bd = conn.read(worksheet="Consumo_Empleados", ttl=600)
             except:
-                df_empleados_bd = pd.DataFrame() # Si no existe, creamos un df vacío
+                df_empleados_bd = pd.DataFrame() 
 
             if not df_historial.empty and "Fecha" in df_historial.columns:
                 df_historial["Fecha_dt"] = pd.to_datetime(df_historial["Fecha"], format="%d/%m/%Y", errors="coerce")
@@ -81,7 +97,7 @@ with st.sidebar:
                 meses_disponibles.sort(reverse=True)
                 
                 if meses_disponibles:
-                    mes_seleccionado = st.selectbox("📅 Seleccionar Mes", meses_disponibles)
+                    mes_seleccionado = st.selectbox("Seleccionar Mes", meses_disponibles)
                     
                     df_mes = df_historial[df_historial["Mes_Año"] == mes_seleccionado].copy()
                     
@@ -101,9 +117,7 @@ with st.sidebar:
                             "Método": ["Efectivo", "Digital"],
                             "Monto": [tot_efectivo, tot_digital]
                         })
-                        # Gráfico circular
                         fig = px.pie(df_pie, values='Monto', names='Método', hole=0.3)
-                        # Configurado para mostrar solo porcentajes y etiqueta, sin el monto en dinero
                         fig.update_traces(textinfo='percent', textposition='inside', hoverinfo='label+percent')
                         fig.update_layout(showlegend=True, margin=dict(t=10, b=10, l=10, r=10), height=300, 
                                           legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5))
@@ -116,23 +130,19 @@ with st.sidebar:
                     # --- 2. CONSUMO DE EMPLEADOS ---
                     st.markdown("**Mercadería por Empleado**")
                     if not df_empleados_bd.empty and "Fecha" in df_empleados_bd.columns:
-                        # Damos formato a las fechas
                         df_empleados_bd["Fecha_dt"] = pd.to_datetime(df_empleados_bd["Fecha"], format="%d/%m/%Y", errors="coerce")
                         df_empleados_bd["Mes_Año"] = df_empleados_bd["Fecha_dt"].dt.strftime("%m/%Y")
                         
-                        # Filtramos por mes
                         df_emp_mes = df_empleados_bd[df_empleados_bd["Mes_Año"] == mes_seleccionado].copy()
                         
                         if not df_emp_mes.empty:
                             df_emp_mes["Monto"] = pd.to_numeric(df_emp_mes["Monto"], errors="coerce").fillna(0)
-                            # Agrupamos sumando el consumo por empleado
                             consumo_agrupado = df_emp_mes.groupby("Empleado")["Monto"].sum().reset_index()
-                            # Filtramos solo los que consumieron algo (> 0) y los ordenamos de mayor a menor
                             consumo_agrupado = consumo_agrupado[consumo_agrupado["Monto"] > 0].sort_values(by="Monto", ascending=False)
                             
                             if not consumo_agrupado.empty:
                                 for _, row in consumo_agrupado.iterrows():
-                                    st.write(f"🧑‍🍳 **{row['Empleado']}**: ${row['Monto']:,.2f}")
+                                    st.write(f"**{row['Empleado']}**: ${row['Monto']:,.2f}")
                             else:
                                 st.caption("Nadie retiró mercadería este mes.")
                         else:
@@ -141,11 +151,8 @@ with st.sidebar:
                         st.caption("No se encontró la tabla de Consumo_Empleados en Drive.")
 
                     st.markdown("---")
-                    st.caption(f"📌 Basado en {len(df_mes)} cierres de caja.")
+                    st.caption(f"Basado en {len(df_mes)} cierres de caja.")
                     
-                    if st.button("Actualizar Datos 🔄"):
-                        st.cache_data.clear()
-                        st.rerun()
                 else:
                     st.info("No hay fechas registradas con el formato correcto.")
             else:
@@ -153,20 +160,25 @@ with st.sidebar:
         except Exception as e:
             st.error(f"Error cargando el análisis: {e}")
 
-# --- 2. CARGA DE DATOS MAESTROS --- 
-lista_proveedores = ["Pan Rustico", "Pan Fresh", "Dharma", "ValMaira", "Aprea", "CocaCola", "Grenn&Co", "Basile Walter", "Otro"] 
-lista_cajeros = ["Leandro", "Natalia", "Santiago"] 
-lista_empleados = ["Leandro", "Natalia", "Santiago", "Julieta", "Mariela", "Fernanda", "Brian", "Erika", "Oriana"] 
-
-df_directorio = pd.DataFrame() 
-if 'conn' in globals(): 
-    try: 
-        df_directorio = conn.read(worksheet="Directorio", ttl=600) 
-        if not df_directorio.empty and "Proveedor" in df_directorio.columns: 
-            lista_proveedores = df_directorio["Proveedor"].dropna().unique().tolist() 
-            if "Otro" not in lista_proveedores: lista_proveedores.append("Otro") 
-    except: 
-        pass 
+    # --- 3. GLOSARIO DE PROVEEDORES ---
+    st.markdown("---")
+    st.markdown("**Glosario de Proveedores**")
+    if not df_directorio.empty:
+        # Filtramos las columnas que indicaste si existen en el GSheets
+        columnas_deseadas = ["Proveedor", "Razon Social", "CUIT", "Alias/CBU", "Telefono"]
+        columnas_disponibles = [col for col in columnas_deseadas if col in df_directorio.columns]
+        
+        if columnas_disponibles:
+            st.dataframe(df_directorio[columnas_disponibles], hide_index=True, use_container_width=True)
+        else:
+            st.dataframe(df_directorio, hide_index=True, use_container_width=True)
+    else:
+        st.caption("No se encontraron datos de proveedores.")
+        
+    st.markdown("---")
+    if st.button("Actualizar Datos"):
+        st.cache_data.clear()
+        st.rerun()
 
 # --- 3. VARIABLES DE SESIÓN --- 
 session_keys = { 
@@ -415,7 +427,7 @@ if c2.button("Guardar en Drive", use_container_width=True):
      
     if guardar_todo_en_nube(datos, df_proveedores, df_empleados): 
         st.success("Guardado exitoso") 
-        st.balloons() 
+        # Sacamos st.balloons() ya que es visual y juguetón (similar a un emoji)
 
 if c3.button("Generar PDF", use_container_width=True): 
     desglose = {"MP": mp, "Nave": nave, "Clover": clover, "BBVA": bbva} 
