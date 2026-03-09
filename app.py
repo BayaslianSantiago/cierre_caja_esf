@@ -248,6 +248,14 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
     dibujar_kpi("1. BALANZA", balanza) 
     dibujar_kpi("2. EFECTIVO", efectivo_neto) 
     dibujar_kpi("3. DIGITAL", total_digital) 
+    
+    # --- NUEVO: DESGLOSE DIGITAL EN EL PDF ---
+    if desglose_digital:
+        pdf.set_font("Arial", '', 9)
+        for pos_nombre, pos_monto in desglose_digital.items():
+            if pos_monto > 0:
+                pdf.cell(130, 5, f"      - {pos_nombre}"); pdf.cell(40, 5, f"$ {pos_monto:,.2f}", align='R', ln=1)
+        pdf.ln(2)
      
     pdf.ln(2); pdf.set_font("Arial", '', 10) 
     pdf.cell(0, 6, f"Ticket Fiscal (Z): $ {registradora:,.2f}", border=0, align='C', ln=1) 
@@ -299,7 +307,6 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
 # --- 6. INTERFAZ UI --- 
 def input_tabla(titulo, key, solo_monto=False): 
     st.markdown(f"**{titulo}**") 
-    # Cambio clave aquí: format="$%.2f" y step=0.01 para permitir centavos
     cfg = {"Monto": st.column_config.NumberColumn("($)", format="$%.2f", min_value=0.0, step=0.01)} 
     if not solo_monto: cfg["Descripción"] = st.column_config.TextColumn("Detalle", required=True) 
 
@@ -334,7 +341,6 @@ df_transferencias, total_transf_in = input_tabla("Transferencias", "df_transfere
 st.markdown(separador_grueso, unsafe_allow_html=True) 
 
 # --- BLOQUE 5: REGISTRADORA, BALANZA Y EFECTIVO ---
-# Agregamos format="%.2f" a todos los inputs manuales
 registradora_total = st.number_input("Registradora (Z)", 0.0, step=100.0, format="%.2f") 
 balanza_total = st.number_input("Balanza", 0.0, step=100.0, format="%.2f") 
 
@@ -369,7 +375,7 @@ st.markdown("**Mercaderia de Empleados**")
 cfg_emp = { 
     "Empleado": st.column_config.SelectboxColumn("Empleado", options=lista_empleados, required=True), 
     "Ticket": st.column_config.SelectboxColumn("Tipo", options=["Con Ticket", "Sin Ticket"], required=True),
-    "Monto": st.column_config.NumberColumn("Monto ($)", format="$%.2f", min_value=0.0, step=0.01) # Cambio aquí para centavos
+    "Monto": st.column_config.NumberColumn("Monto ($)", format="$%.2f", min_value=0.0, step=0.01) 
 } 
 df_empleados = st.data_editor(st.session_state.df_empleados, column_config=cfg_emp, num_rows="dynamic", use_container_width=True, key="ed_emp", hide_index=True) 
 
@@ -382,7 +388,7 @@ st.markdown("**Pago a Proveedores**")
 cfg_prov = { 
     "Proveedor": st.column_config.SelectboxColumn("Proveedor", options=lista_proveedores, required=True), 
     "Forma Pago": st.column_config.SelectboxColumn("Metodo", options=["Efectivo", "Digital / Banco"], required=True), 
-    "Monto": st.column_config.NumberColumn("Monto ($)", format="$%.2f", min_value=0.0, step=0.01) # Cambio aquí para centavos
+    "Monto": st.column_config.NumberColumn("Monto ($)", format="$%.2f", min_value=0.0, step=0.01) 
 } 
 df_proveedores = st.data_editor(st.session_state.df_proveedores, column_config=cfg_prov, num_rows="dynamic", use_container_width=True, key="ed_prov", hide_index=True) 
 total_prov_efectivo = df_proveedores[df_proveedores["Forma Pago"] == "Efectivo"]["Monto"].sum() 
@@ -425,7 +431,8 @@ if c2.button("Guardar en Drive", use_container_width=True):
         st.success("Guardado exitoso") 
 
 if c3.button("Generar PDF", use_container_width=True): 
-    desglose = {"MP": mp, "Nave": nave, "Clover": clover, "BBVA": bbva} 
+    # Aquí definimos cómo se verán los nombres en el PDF
+    desglose = {"Mercado Pago": mp, "Nave": nave, "Clover": clover, "BBVA": bbva} 
     pdf_bytes = generar_pdf_profesional(fecha_input, cajero, balanza_total, registradora_total,  
                                         total_digital, efectivo_neto, df_salidas, df_transferencias,  
                                         df_errores, df_vales, df_descuentos, df_proveedores,  
