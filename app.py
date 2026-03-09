@@ -5,9 +5,9 @@ from fpdf import FPDF
 import os 
 from streamlit_gsheets import GSheetsConnection 
 import streamlit.components.v1 as components 
+import plotly.express as px  # <-- NUEVA LIBRERÍA PARA EL GRÁFICO DE TORTA
 
 # --- 1. CONFIGURACIÓN Y LOGIN --- 
-# Agregamos initial_sidebar_state="collapsed" para que inicie oculta
 st.set_page_config(page_title="Cierre de Caja - Estancia San Francisco", layout="centered", initial_sidebar_state="collapsed") 
 
 # ESCUDO ANTI-CIERRE ACCIDENTAL 
@@ -28,7 +28,7 @@ hide_st_style = """
             .block-container {padding-top: 2rem; padding-bottom: 2rem;}  
             </style> 
             """ 
-st.markdown(hide_st_style, unsafe_allow_html=True)
+st.markdown(hide_st_style, unsafe_allow_html=True) 
 
 # SISTEMA DE LOGIN 
 def check_password(): 
@@ -57,75 +57,99 @@ try:
 except: 
     st.error("Error de conexión con Google Sheets") 
 
-# --- NUEVO: SIDEBAR DE ANÁLISIS MENSUAL ---
+# --- SIDEBAR DE ANÁLISIS MENSUAL ACTUALIZADO ---
 with st.sidebar:
     st.title("📊 Análisis de Cierres")
-    st.markdown("Revisa el rendimiento histórico desde la base de datos.")
     
     if 'conn' in globals():
         try:
             # Traemos la pestaña Historial
             df_historial = conn.read(worksheet="Historial", ttl=600)
             
+            # Intentamos traer la hoja de Consumo_Empleados
+            try:
+                df_empleados_bd = conn.read(worksheet="Consumo_Empleados", ttl=600)
+            except:
+                df_empleados_bd = pd.DataFrame() # Si no existe, creamos un df vacío
+
             if not df_historial.empty and "Fecha" in df_historial.columns:
-                # Convertimos la columna Fecha (texto) a formato de fecha real
                 df_historial["Fecha_dt"] = pd.to_datetime(df_historial["Fecha"], format="%d/%m/%Y", errors="coerce")
-                # Creamos una columna Mes/Año para filtrar
                 df_historial["Mes_Año"] = df_historial["Fecha_dt"].dt.strftime("%m/%Y")
-                
-                # Descartamos filas sin fecha válida
                 df_historial = df_historial.dropna(subset=["Fecha_dt"])
                 
                 meses_disponibles = df_historial["Mes_Año"].unique().tolist()
-                meses_disponibles.sort(reverse=True) # Mostrar el mes más reciente primero
+                meses_disponibles.sort(reverse=True)
                 
                 if meses_disponibles:
                     mes_seleccionado = st.selectbox("📅 Seleccionar Mes", meses_disponibles)
                     
-                    # Filtramos los datos por el mes seleccionado
                     df_mes = df_historial[df_historial["Mes_Año"] == mes_seleccionado].copy()
                     
-                    # Convertimos las métricas a números para poder sumarlas
-                    cols_numericas = ["Balanza", "Digital", "Efectivo", "Salidas", "Proveedores", "Diferencia", "Errores"]
-                    for col in cols_numericas:
-                        if col in df_mes.columns:
-                            df_mes[col] = pd.to_numeric(df_mes[col], errors="coerce").fillna(0)
+                    df_mes["Digital"] = pd.to_numeric(df_mes["Digital"], errors="coerce").fillna(0)
+                    df_mes["Efectivo"] = pd.to_numeric(df_mes["Efectivo"], errors="coerce").fillna(0)
                     
-                    # Cálculos
-                    tot_balanza = df_mes["Balanza"].sum()
-                    tot_diferencia = df_mes["Diferencia"].sum()
                     tot_digital = df_mes["Digital"].sum()
                     tot_efectivo = df_mes["Efectivo"].sum()
-                    tot_salidas = df_mes["Salidas"].sum()
-                    tot_proveedores = df_mes["Proveedores"].sum()
                     
                     st.markdown("---")
-                    st.subheader(f"Resumen de {mes_seleccionado}")
+                    st.subheader(f"Resumen {mes_seleccionado}")
                     
-                    st.metric("Ventas Totales (Balanza)", f"${tot_balanza:,.2f}")
-                    # Color invertido: si hay diferencia positiva (faltante acumulado), se pone rojo.
-                    st.metric("Diferencia de Caja Acumulada", f"${tot_diferencia:,.2f}", delta_color="inverse" if tot_diferencia > 0 else "normal")
+                    # --- 1. GRÁFICO DE TORTA (PORCENTAJES) ---
+                    st.markdown("**Proporción: Efectivo vs Digital**")
+                    if tot_digital > 0 or tot_efectivo > 0:
+                        df_pie = pd.DataFrame({
+                            "Método": ["Efectivo", "Digital"],
+                            "Monto": [tot_efectivo, tot_digital]
+                        })
+                        # Gráfico circular
+                        fig = px.pie(df_pie, values='Monto', names='Método', hole=0.3)
+                        # Configurado para mostrar solo porcentajes y etiqueta, sin el monto en dinero
+                        fig.update_traces(textinfo='percent', textposition='inside', hoverinfo='label+percent')
+                        fig.update_layout(showlegend=True, margin=dict(t=10, b=10, l=10, r=10), height=300, 
+                                          legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5))
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.info("No hay ingresos registrados este mes.")
                     
                     st.markdown("---")
-                    st.markdown("**Desglose de Ingresos**")
-                    st.metric("Total Digitales", f"${tot_digital:,.2f}")
-                    st.metric("Total Efectivo", f"${tot_efectivo:,.2f}")
                     
+                    # --- 2. CONSUMO DE EMPLEADOS ---
+                    st.markdown("**Mercadería por Empleado**")
+                    if not df_empleados_bd.empty and "Fecha" in df_empleados_bd.columns:
+                        # Damos formato a las fechas
+                        df_empleados_bd["Fecha_dt"] = pd.to_datetime(df_empleados_bd["Fecha"], format="%d/%m/%Y", errors="coerce")
+                        df_empleados_bd["Mes_Año"] = df_empleados_bd["Fecha_dt"].dt.strftime("%m/%Y")
+                        
+                        # Filtramos por mes
+                        df_emp_mes = df_empleados_bd[df_empleados_bd["Mes_Año"] == mes_seleccionado].copy()
+                        
+                        if not df_emp_mes.empty:
+                            df_emp_mes["Monto"] = pd.to_numeric(df_emp_mes["Monto"], errors="coerce").fillna(0)
+                            # Agrupamos sumando el consumo por empleado
+                            consumo_agrupado = df_emp_mes.groupby("Empleado")["Monto"].sum().reset_index()
+                            # Filtramos solo los que consumieron algo (> 0) y los ordenamos de mayor a menor
+                            consumo_agrupado = consumo_agrupado[consumo_agrupado["Monto"] > 0].sort_values(by="Monto", ascending=False)
+                            
+                            if not consumo_agrupado.empty:
+                                for _, row in consumo_agrupado.iterrows():
+                                    st.write(f"🧑‍🍳 **{row['Empleado']}**: ${row['Monto']:,.2f}")
+                            else:
+                                st.caption("Nadie retiró mercadería este mes.")
+                        else:
+                            st.caption("No hay registros de mercadería en este mes.")
+                    else:
+                        st.caption("No se encontró la tabla de Consumo_Empleados en Drive.")
+
                     st.markdown("---")
-                    st.markdown("**Desglose de Egresos**")
-                    st.metric("Gastos Varios (Salidas)", f"${tot_salidas:,.2f}")
-                    st.metric("Pago a Proveedores", f"${tot_proveedores:,.2f}")
-                    
-                    st.markdown("---")
-                    st.caption(f"📌 Basado en {len(df_mes)} cierres de caja este mes.")
+                    st.caption(f"📌 Basado en {len(df_mes)} cierres de caja.")
                     
                     if st.button("Actualizar Datos 🔄"):
-                        st.cache_data.clear() # Limpia la caché para obligar a Streamlit a leer el Sheets de nuevo
+                        st.cache_data.clear()
                         st.rerun()
                 else:
-                    st.info("No hay fechas registradas con el formato correcto (DD/MM/YYYY).")
+                    st.info("No hay fechas registradas con el formato correcto.")
             else:
-                st.info("El historial está vacío o no se encontró la columna 'Fecha'.")
+                st.info("El historial está vacío.")
         except Exception as e:
             st.error(f"Error cargando el análisis: {e}")
 
