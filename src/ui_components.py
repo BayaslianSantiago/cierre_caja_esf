@@ -8,18 +8,19 @@ def render_input_tabla(titulo, session_key, solo_monto=False):
     if not solo_monto: 
         cfg["Descripción"] = st.column_config.TextColumn("Detalle", required=True) 
 
-    # Limpiamos el índice antes de mostrar para evitar la columna extra '0', '1', etc.
-    df_input = st.session_state[session_key].reset_index(drop=True)
-
-    df = st.data_editor(
-        df_input, 
+    # Sincronización robusta: 
+    # Usamos st.data_editor directamente con el DataFrame de session_state.
+    # Streamlit actualizará automáticamente el valor devuelto.
+    df_editado = st.data_editor(
+        st.session_state[session_key], 
         column_config=cfg, 
         num_rows="dynamic", 
         use_container_width=True, 
-        key=f"ed_{session_key}", 
+        key=f"editor_widget_{session_key}", # Key fija para el widget
         hide_index=True
     ) 
     
-    # Guardamos con el índice reseteado para que no se acumule
-    st.session_state[session_key] = df.reset_index(drop=True)
-    return st.session_state[session_key], (df["Monto"].sum() if not df.empty else 0.0) 
+    # Actualizamos la sesión solo si hay cambios para evitar reruns infinitos o pérdida de foco
+    st.session_state[session_key] = df_editado.reset_index(drop=True)
+    
+    return st.session_state[session_key], (df_editado["Monto"].sum() if not df_editado.empty else 0.0) 

@@ -70,7 +70,15 @@ cfg_emp = {
     "Ticket": st.column_config.SelectboxColumn("Tipo", options=["Con Ticket", "Sin Ticket"], required=True),
     "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0) 
 } 
-df_empleados = st.data_editor(st.session_state.df_empleados.reset_index(drop=True), column_config=cfg_emp, num_rows="dynamic", use_container_width=True, key="ed_emp", hide_index=True) 
+# Usamos el DF de la sesión directamente sin reset_index previo para no romper la referencia del widget
+df_empleados = st.data_editor(
+    st.session_state.df_empleados, 
+    column_config=cfg_emp, 
+    num_rows="dynamic", 
+    use_container_width=True, 
+    key="widget_empleados", 
+    hide_index=True
+) 
 st.session_state.df_empleados = df_empleados.reset_index(drop=True)
 
 # Lógica de Empleados: Solo sumamos los "Con Ticket" al total justificado
@@ -79,23 +87,7 @@ total_empleados = df_empleados[df_empleados["Ticket"] == "Con Ticket"]["Monto"].
 st.markdown("---")
 
 # Ventas y Efectivo
-col_core1, col_core2 = st.columns(2) 
-with col_core1:  
-    balanza_total = st.number_input("Total Balanza (Venta Real)", 0.0, step=100.0) 
-    registradora_total = st.number_input("Registradora (Z)", 0.0, step=100.0) 
-with col_core2: 
-    with st.expander("Calculadora de Billetes", expanded=False): 
-        b20k = st.number_input("$20k", 0); b10k = st.number_input("$10k", 0) 
-        b2k = st.number_input("$2k", 0); b1k = st.number_input("$1k", 0) 
-        total_fisico = (b20k*20000)+(b10k*10000)+(b2k*2000)+(b1k*1000) 
-    efectivo_neto = st.number_input("Efectivo Total en Caja", value=float(total_fisico)) 
-
-st.markdown("**Cobros Digitales**") 
-cd1, cd2, cd3, cd4 = st.columns(4) 
-mp = cd1.number_input("Mercado Pago", 0.0); nave = cd2.number_input("Nave", 0.0) 
-clover = cd3.number_input("Clover", 0.0); bbva = cd4.number_input("BBVA", 0.0) 
-total_digital = mp + nave + clover + bbva 
-st.markdown("---") 
+# ... (líneas 80-100 aprox) ...
 
 # Proveedores y Gastos
 st.markdown("**Pago a Proveedores**") 
@@ -104,7 +96,14 @@ cfg_prov = {
     "Forma Pago": st.column_config.SelectboxColumn("Método", options=["Efectivo", "Digital / Banco"], required=True), 
     "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0) 
 } 
-df_proveedores = st.data_editor(st.session_state.df_proveedores.reset_index(drop=True), column_config=cfg_prov, num_rows="dynamic", use_container_width=True, key="ed_prov", hide_index=True) 
+df_proveedores = st.data_editor(
+    st.session_state.df_proveedores, 
+    column_config=cfg_prov, 
+    num_rows="dynamic", 
+    use_container_width=True, 
+    key="widget_proveedores", 
+    hide_index=True
+) 
 st.session_state.df_proveedores = df_proveedores.reset_index(drop=True)
 total_prov_efectivo = df_proveedores[df_proveedores["Forma Pago"] == "Efectivo"]["Monto"].sum() if not df_proveedores.empty else 0.0
 
