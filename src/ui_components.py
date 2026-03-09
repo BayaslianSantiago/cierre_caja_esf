@@ -3,35 +3,35 @@ import pandas as pd
 
 def render_input_tabla(titulo, session_key, solo_monto=False):
     """
-    Renderiza un editor de datos usando listas nativas de Python.
-    ESTO ELIMINA EL ERROR DEL ÍNDICE DEFINITIVAMENTE.
+    Renderiza un editor de datos estable.
+    Usa column_order para forzar que NO se vea el índice.
     """
     st.markdown(f"**{titulo}**") 
     
-    # Definición estricta de columnas
+    # Definición de columnas
+    columnas = ["Monto"] if solo_monto else ["Descripción", "Monto"]
     cfg = {"Monto": st.column_config.NumberColumn("($)", format="$%d", min_value=0, required=True, default=0)} 
     if not solo_monto: 
         cfg["Descripción"] = st.column_config.TextColumn("Detalle", required=True) 
 
-    # Aseguramos que la sesión sea una LISTA, no un DataFrame
-    if isinstance(st.session_state[session_key], pd.DataFrame):
-        st.session_state[session_key] = st.session_state[session_key].to_dict('records')
+    # Aseguramos que sea un DataFrame con las columnas correctas
+    if not isinstance(st.session_state[session_key], pd.DataFrame):
+        st.session_state[session_key] = pd.DataFrame(columns=columnas)
 
-    # El editor trabaja con la lista directamente
-    datos_editados = st.data_editor(
+    # TRUCO: column_order fuerza a Streamlit a mostrar SOLO estas columnas,
+    # eliminando visualmente el índice de Pandas (la columna '0', '1', etc.)
+    df_editado = st.data_editor(
         st.session_state[session_key], 
         column_config=cfg, 
+        column_order=columnas, # <--- ESTO ELIMINA EL ÍNDICE
         num_rows="dynamic", 
         use_container_width=True, 
-        key=f"pure_list_editor_{session_key}", 
+        key=f"st_editor_{session_key}", 
         hide_index=True
     ) 
     
-    # Sincronizamos la lista
-    st.session_state[session_key] = datos_editados
+    # Sincronizamos
+    st.session_state[session_key] = df_editado
     
-    # Convertimos a DF solo para calcular el total
-    df_temp = pd.DataFrame(datos_editados)
-    total = df_temp["Monto"].fillna(0).sum() if not df_temp.empty else 0.0
-    
-    return df_temp, total
+    total = df_editado["Monto"].fillna(0).sum() if not df_editado.empty else 0.0
+    return df_editado, total
