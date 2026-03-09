@@ -43,9 +43,9 @@ def check_password():
         return True 
 
     st.title("Acceso Restringido") 
-    st.text_input("Ingresá la contraseña del local:", type="password", on_change=password_entered, key="password") 
+    st.text_input("Ingresar la contrasena del local:", type="password", on_change=password_entered, key="password") 
     if "password_correct" in st.session_state and not st.session_state["password_correct"]: 
-        st.error("Contraseña incorrecta") 
+        st.error("Contrasena incorrecta") 
     return False 
 
 if not check_password(): 
@@ -55,9 +55,9 @@ if not check_password():
 try: 
     conn = st.connection("gsheets", type=GSheetsConnection) 
 except: 
-    st.error("Error de conexión con Google Sheets") 
+    st.error("Error de conexion con Google Sheets") 
 
-# --- 2. CARGA DE DATOS MAESTROS (Movido arriba para usarlo en la sidebar) --- 
+# --- 2. CARGA DE DATOS MAESTROS --- 
 lista_proveedores = ["Pan Rustico", "Pan Fresh", "Dharma", "ValMaira", "Aprea", "CocaCola", "Grenn&Co", "Basile Walter", "Otro"] 
 lista_cajeros = ["Leandro", "Natalia", "Santiago"] 
 lista_empleados = ["Leandro", "Natalia", "Santiago", "Julieta", "Mariela", "Fernanda", "Brian", "Erika", "Oriana"] 
@@ -65,7 +65,6 @@ lista_empleados = ["Leandro", "Natalia", "Santiago", "Julieta", "Mariela", "Fern
 df_directorio = pd.DataFrame() 
 if 'conn' in globals(): 
     try: 
-        # Asegurate de que la hoja en tu Google Sheets se llame "Directorio" o cambiá este nombre
         df_directorio = conn.read(worksheet="Directorio", ttl=600) 
         if not df_directorio.empty and "Proveedor" in df_directorio.columns: 
             lista_proveedores = df_directorio["Proveedor"].dropna().unique().tolist() 
@@ -75,11 +74,11 @@ if 'conn' in globals():
 
 # --- SIDEBAR DE ANÁLISIS MENSUAL Y GLOSARIO ---
 with st.sidebar:
-    st.title("Análisis de Cierres")
+    st.title("Analisis de Cierres")
     
     if 'conn' in globals():
         try:
-            # Traemos la pestaña Historial
+            # Traemos la pestana Historial
             df_historial = conn.read(worksheet="Historial", ttl=600)
             
             # Intentamos traer la hoja de Consumo_Empleados
@@ -111,13 +110,13 @@ with st.sidebar:
                     st.subheader(f"Resumen {mes_seleccionado}")
                     
                     # --- 1. GRÁFICO DE TORTA (PORCENTAJES) ---
-                    st.markdown("**Proporción: Efectivo vs Digital**")
+                    st.markdown("**Proporcion: Efectivo vs Digital**")
                     if tot_digital > 0 or tot_efectivo > 0:
                         df_pie = pd.DataFrame({
-                            "Método": ["Efectivo", "Digital"],
+                            "Metodo": ["Efectivo", "Digital"],
                             "Monto": [tot_efectivo, tot_digital]
                         })
-                        fig = px.pie(df_pie, values='Monto', names='Método', hole=0.3)
+                        fig = px.pie(df_pie, values='Monto', names='Metodo', hole=0.3)
                         fig.update_traces(textinfo='percent', textposition='inside', hoverinfo='label+percent')
                         fig.update_layout(showlegend=True, margin=dict(t=10, b=10, l=10, r=10), height=300, 
                                           legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5))
@@ -128,7 +127,7 @@ with st.sidebar:
                     st.markdown("---")
                     
                     # --- 2. CONSUMO DE EMPLEADOS ---
-                    st.markdown("**Mercadería por Empleado**")
+                    st.markdown("**Mercaderia por Empleado**")
                     if not df_empleados_bd.empty and "Fecha" in df_empleados_bd.columns:
                         df_empleados_bd["Fecha_dt"] = pd.to_datetime(df_empleados_bd["Fecha"], format="%d/%m/%Y", errors="coerce")
                         df_empleados_bd["Mes_Año"] = df_empleados_bd["Fecha_dt"].dt.strftime("%m/%Y")
@@ -144,11 +143,11 @@ with st.sidebar:
                                 for _, row in consumo_agrupado.iterrows():
                                     st.write(f"**{row['Empleado']}**: ${row['Monto']:,.2f}")
                             else:
-                                st.caption("Nadie retiró mercadería este mes.")
+                                st.caption("Nadie retiro mercaderia este mes.")
                         else:
-                            st.caption("No hay registros de mercadería en este mes.")
+                            st.caption("No hay registros de mercaderia en este mes.")
                     else:
-                        st.caption("No se encontró la tabla de Consumo_Empleados en Drive.")
+                        st.caption("No se encontro la tabla de Consumo_Empleados en Drive.")
 
                     st.markdown("---")
                     st.caption(f"Basado en {len(df_mes)} cierres de caja.")
@@ -156,24 +155,23 @@ with st.sidebar:
                 else:
                     st.info("No hay fechas registradas con el formato correcto.")
             else:
-                st.info("El historial está vacío.")
+                st.info("El historial esta vacio.")
         except Exception as e:
-            st.error(f"Error cargando el análisis: {e}")
+            st.error(f"Error cargando el analisis: {e}")
 
-    # --- 3. GLOSARIO DE PROVEEDORES ---
+    # --- 3. GLOSARIO DE PROVEEDORES EN POPOVER ---
     st.markdown("---")
-    st.markdown("**Glosario de Proveedores**")
-    if not df_directorio.empty:
-        # Filtramos las columnas que indicaste si existen en el GSheets
-        columnas_deseadas = ["Proveedor", "Razon Social", "CUIT", "Alias/CBU", "Telefono"]
-        columnas_disponibles = [col for col in columnas_deseadas if col in df_directorio.columns]
-        
-        if columnas_disponibles:
-            st.dataframe(df_directorio[columnas_disponibles], hide_index=True, use_container_width=True)
+    with st.popover("Ver Glosario de Proveedores"):
+        if not df_directorio.empty:
+            columnas_deseadas = ["Proveedor", "Razon Social", "CUIT", "Alias/CBU", "Telefono"]
+            columnas_disponibles = [col for col in columnas_deseadas if col in df_directorio.columns]
+            
+            if columnas_disponibles:
+                st.dataframe(df_directorio[columnas_disponibles], hide_index=True, use_container_width=True)
+            else:
+                st.dataframe(df_directorio, hide_index=True, use_container_width=True)
         else:
-            st.dataframe(df_directorio, hide_index=True, use_container_width=True)
-    else:
-        st.caption("No se encontraron datos de proveedores.")
+            st.caption("No se encontraron datos de proveedores.")
         
     st.markdown("---")
     if st.button("Actualizar Datos"):
@@ -219,7 +217,6 @@ def guardar_todo_en_nube(datos_cierre, df_provs, df_empls):
             df_empl_upd = pd.concat([df_empl_ant, consumos_empl], ignore_index=True).fillna("") 
             conn.update(worksheet="Consumo_Empleados", data=df_empl_upd) 
              
-        # Limpiar caché después de guardar para que el panel lateral se actualice
         st.cache_data.clear()
         return True 
     except Exception as e: 
@@ -238,7 +235,7 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
         try: pdf.image("logo.png", 15, 10, 30) 
         except: pass  
 
-    dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"] 
+    dias_semana = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo"] 
     fecha_texto = f"{dias_semana[fecha.weekday()]} {fecha.strftime('%d/%m/%Y')}" 
 
     pdf.set_xy(50, 12); pdf.set_font("Arial", 'B', 18); pdf.cell(0, 10, "ESTANCIA SAN FRANCISCO", ln=1) 
@@ -275,7 +272,7 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
         pdf.ln(2) 
 
     dibujar_tabla("PAGO A PROVEEDORES", df_proveedores) 
-    dibujar_tabla("MERCADERÍA EMPLEADOS", df_empleados) 
+    dibujar_tabla("MERCADERIA EMPLEADOS", df_empleados) 
     
     if not df_transferencias.empty and df_transferencias['Monto'].sum() > 0:
         total_transf_acumulado = df_transferencias['Monto'].sum()
@@ -370,7 +367,7 @@ df_salidas, total_salidas = input_tabla("Salida de Caja", "df_salidas")
 st.markdown(separador_grueso, unsafe_allow_html=True) 
 
 # --- BLOQUE 8: MERCADERÍA, PROVEEDORES Y CAJA REAL ---
-st.markdown("**Mercadería de Empleados**") 
+st.markdown("**Mercaderia de Empleados**") 
 cfg_emp = { 
     "Empleado": st.column_config.SelectboxColumn("Empleado", options=lista_empleados, required=True), 
     "Ticket": st.column_config.SelectboxColumn("Tipo", options=["Con Ticket", "Sin Ticket"], required=True),
@@ -386,7 +383,7 @@ else:
 st.markdown("**Pago a Proveedores**") 
 cfg_prov = { 
     "Proveedor": st.column_config.SelectboxColumn("Proveedor", options=lista_proveedores, required=True), 
-    "Forma Pago": st.column_config.SelectboxColumn("Método", options=["Efectivo", "Digital / Banco"], required=True), 
+    "Forma Pago": st.column_config.SelectboxColumn("Metodo", options=["Efectivo", "Digital / Banco"], required=True), 
     "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0) 
 } 
 df_proveedores = st.data_editor(st.session_state.df_proveedores, column_config=cfg_prov, num_rows="dynamic", use_container_width=True, key="ed_prov", hide_index=True) 
@@ -426,8 +423,8 @@ if c2.button("Guardar en Drive", use_container_width=True):
     } 
      
     if guardar_todo_en_nube(datos, df_proveedores, df_empleados): 
+        st.toast("Cierre guardado correctamente")
         st.success("Guardado exitoso") 
-        # Sacamos st.balloons() ya que es visual y juguetón (similar a un emoji)
 
 if c3.button("Generar PDF", use_container_width=True): 
     desglose = {"MP": mp, "Nave": nave, "Clover": clover, "BBVA": bbva} 
