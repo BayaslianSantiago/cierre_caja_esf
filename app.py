@@ -70,18 +70,22 @@ cfg_emp = {
     "Ticket": st.column_config.SelectboxColumn("Tipo", options=["Con Ticket", "Sin Ticket"], required=True),
     "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0, required=True) 
 } 
+# Usamos el DF de la sesión como base. El widget con KEY se encarga de la persistencia
 df_empleados = st.data_editor(
     st.session_state.df_empleados, 
     column_config=cfg_emp, 
     num_rows="dynamic", 
     use_container_width=True, 
-    key="widget_empleados_root", 
+    key="widget_empleados_final", 
     hide_index=True
 ) 
 st.session_state.df_empleados = df_empleados
 
-# Lógica de Empleados: Solo sumamos los "Con Ticket" al total justificado
-total_empleados = df_empleados[df_empleados["Ticket"] == "Con Ticket"]["Monto"].sum() if not df_empleados.empty and "Ticket" in df_empleados.columns else 0.0
+# Lógica de Empleados: Solo sumamos los "Con Ticket" al total justificado (protegiendo contra None)
+if not df_empleados.empty and "Ticket" in df_empleados.columns:
+    total_empleados = df_empleados[df_empleados["Ticket"] == "Con Ticket"]["Monto"].fillna(0).sum()
+else:
+    total_empleados = 0.0
 
 st.markdown("---")
 
@@ -100,11 +104,11 @@ df_proveedores = st.data_editor(
     column_config=cfg_prov, 
     num_rows="dynamic", 
     use_container_width=True, 
-    key="widget_proveedores_root", 
+    key="widget_proveedores_final", 
     hide_index=True
 ) 
 st.session_state.df_proveedores = df_proveedores
-total_prov_efectivo = df_proveedores[df_proveedores["Forma Pago"] == "Efectivo"]["Monto"].sum() if not df_proveedores.empty else 0.0
+total_prov_efectivo = df_proveedores[df_proveedores["Forma Pago"] == "Efectivo"]["Monto"].fillna(0).sum() if not df_proveedores.empty else 0.0
 
 df_salidas, total_salidas = render_input_tabla("Gastos Varios (Salidas de Caja)", "df_salidas") 
 
