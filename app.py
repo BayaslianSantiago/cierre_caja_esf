@@ -70,15 +70,17 @@ cfg_emp = {
     "Ticket": st.column_config.SelectboxColumn("Tipo", options=["Con Ticket", "Sin Ticket"], required=True),
     "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0, required=True) 
 } 
-# Usamos el DF de la sesión como base. El widget con KEY se encarga de la persistencia
-df_empleados = st.data_editor(
-    st.session_state.df_empleados, 
+# Patrón records para evitar el error del índice de la 2da fila
+datos_empleados = st.session_state.df_empleados.to_dict('records')
+df_empleados_edit = st.data_editor(
+    datos_empleados, 
     column_config=cfg_emp, 
     num_rows="dynamic", 
     use_container_width=True, 
-    key="widget_empleados_final", 
+    key="widget_empl_v3", 
     hide_index=True
 ) 
+df_empleados = pd.DataFrame(df_empleados_edit)
 st.session_state.df_empleados = df_empleados
 
 # Lógica de Empleados: Solo sumamos los "Con Ticket" al total justificado (protegiendo contra None)
@@ -99,14 +101,17 @@ cfg_prov = {
     "Forma Pago": st.column_config.SelectboxColumn("Método", options=["Efectivo", "Digital / Banco"], required=True), 
     "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0, required=True) 
 } 
-df_proveedores = st.data_editor(
-    st.session_state.df_proveedores, 
+# Patrón records para evitar el error del índice de la 2da fila
+datos_proveedores = st.session_state.df_proveedores.to_dict('records')
+df_proveedores_edit = st.data_editor(
+    datos_proveedores, 
     column_config=cfg_prov, 
     num_rows="dynamic", 
     use_container_width=True, 
-    key="widget_proveedores_final", 
+    key="widget_prov_v3", 
     hide_index=True
 ) 
+df_proveedores = pd.DataFrame(df_proveedores_edit)
 st.session_state.df_proveedores = df_proveedores
 total_prov_efectivo = df_proveedores[df_proveedores["Forma Pago"] == "Efectivo"]["Monto"].fillna(0).sum() if not df_proveedores.empty else 0.0
 
