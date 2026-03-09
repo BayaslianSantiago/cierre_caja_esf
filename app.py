@@ -24,13 +24,11 @@ components.html(js_warning, height=0)
 
 hide_st_style = """ 
             <style> 
-            #MainMenu {visibility: hidden;} 
             footer {visibility: hidden;} 
-            header {visibility: hidden;} 
             .block-container {padding-top: 2rem; padding-bottom: 2rem;}  
             </style> 
             """ 
-st.markdown(hide_st_style, unsafe_allow_html=True) 
+st.markdown(hide_st_style, unsafe_allow_html=True)
 
 # SISTEMA DE LOGIN 
 def check_password(): 
