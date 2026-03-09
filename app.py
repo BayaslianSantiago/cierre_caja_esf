@@ -212,40 +212,13 @@ with col_enc1: fecha_input = st.date_input("Fecha", datetime.today())
 with col_enc2: cajero = st.selectbox("Cajero de Turno", lista_cajeros) 
 st.markdown("---") 
 
-# BLOQUE 2: VALES Y TRANSFERENCIAS
+# BLOQUE 2: SOMOS AVELLANEDA, VALES Y TRANSFERENCIAS
+df_descuentos, total_descuentos = input_tabla("Somos Avellaneda", "df_descuentos", solo_monto=True) 
 df_vales, total_vales = input_tabla("Vales", "df_vales") 
 df_transferencias, total_transf_in = input_tabla("Transferencias", "df_transferencias", solo_monto=True) 
 st.markdown("---") 
 
-# BLOQUE INTERMEDIO: OTRAS OPERACIONES (Para no perder funcionalidad de tus otras tablas)
-with st.expander("Otras Operaciones (Proveedores, Empleados, Somos Avellaneda)"):
-    df_descuentos, total_descuentos = input_tabla("Somos Avellaneda", "df_descuentos", solo_monto=True) 
-
-    st.markdown("**Mercadería de Empleados**") 
-    cfg_emp = { 
-        "Empleado": st.column_config.SelectboxColumn("Empleado", options=lista_empleados, required=True), 
-        "Ticket": st.column_config.SelectboxColumn("Tipo", options=["Con Ticket", "Sin Ticket"], required=True),
-        "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0) 
-    } 
-    df_empleados = st.data_editor(st.session_state.df_empleados, column_config=cfg_emp, num_rows="dynamic", use_container_width=True, key="ed_emp", hide_index=True) 
-    
-    if not df_empleados.empty and "Ticket" in df_empleados.columns:
-        total_empleados = df_empleados[df_empleados["Ticket"] == "Con Ticket"]["Monto"].sum()
-    else:
-        total_empleados = df_empleados["Monto"].sum() if not df_empleados.empty else 0.0
-
-    st.markdown("**Pago a Proveedores**") 
-    cfg_prov = { 
-        "Proveedor": st.column_config.SelectboxColumn("Proveedor", options=lista_proveedores, required=True), 
-        "Forma Pago": st.column_config.SelectboxColumn("Método", options=["Efectivo", "Digital / Banco"], required=True), 
-        "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0) 
-    } 
-    df_proveedores = st.data_editor(st.session_state.df_proveedores, column_config=cfg_prov, num_rows="dynamic", use_container_width=True, key="ed_prov", hide_index=True) 
-    total_prov_efectivo = df_proveedores[df_proveedores["Forma Pago"] == "Efectivo"]["Monto"].sum() 
-st.markdown("---")
-
-# BLOQUE 3: REGISTRADORA, BALANZA Y EFECTIVO (Uno abajo del otro)
-st.markdown("### Control de Caja Física")
+# BLOQUE 3: REGISTRADORA, BALANZA Y EFECTIVO (Uno abajo del otro, sin título)
 registradora_total = st.number_input("Registradora (Z)", 0.0, step=100.0) 
 balanza_total = st.number_input("Balanza", 0.0, step=100.0) 
 
@@ -257,8 +230,7 @@ with st.expander("Calculadora de Billetes", expanded=False):
 efectivo_neto = st.number_input("Efectivo", value=float(total_fisico)) 
 st.markdown("---") 
 
-# BLOQUE 4: DIGITALES Y TOTAL (Uno abajo del otro)
-st.markdown("### Cobros Digitales") 
+# BLOQUE 4: COBROS DIGITALES (Sin título)
 mp = st.number_input("Mercado Pago", 0.0)
 nave = st.number_input("Nave", 0.0)
 clover = st.number_input("Clover", 0.0)
@@ -268,11 +240,34 @@ total_digital = mp + nave + clover + bbva
 st.info(f"**Total Digital: ${total_digital:,.2f}**")
 st.markdown("---") 
 
-# BLOQUE 5: ERRORES Y SALIDAS
-st.markdown("### Ajustes y Salidas")
+# BLOQUE 5: ERRORES Y SALIDAS (Sin título)
 df_errores, total_errores = input_tabla("Errores", "df_errores", solo_monto=True) 
 df_salidas, total_salidas = input_tabla("Salida de Caja", "df_salidas") 
 st.markdown("---") 
+
+# BLOQUE 6: PROVEEDORES Y EMPLEADOS
+st.markdown("**Pago a Proveedores**") 
+cfg_prov = { 
+    "Proveedor": st.column_config.SelectboxColumn("Proveedor", options=lista_proveedores, required=True), 
+    "Forma Pago": st.column_config.SelectboxColumn("Método", options=["Efectivo", "Digital / Banco"], required=True), 
+    "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0) 
+} 
+df_proveedores = st.data_editor(st.session_state.df_proveedores, column_config=cfg_prov, num_rows="dynamic", use_container_width=True, key="ed_prov", hide_index=True) 
+total_prov_efectivo = df_proveedores[df_proveedores["Forma Pago"] == "Efectivo"]["Monto"].sum() 
+
+st.markdown("**Mercadería de Empleados**") 
+cfg_emp = { 
+    "Empleado": st.column_config.SelectboxColumn("Empleado", options=lista_empleados, required=True), 
+    "Ticket": st.column_config.SelectboxColumn("Tipo", options=["Con Ticket", "Sin Ticket"], required=True),
+    "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0) 
+} 
+df_empleados = st.data_editor(st.session_state.df_empleados, column_config=cfg_emp, num_rows="dynamic", use_container_width=True, key="ed_emp", hide_index=True) 
+
+if not df_empleados.empty and "Ticket" in df_empleados.columns:
+    total_empleados = df_empleados[df_empleados["Ticket"] == "Con Ticket"]["Monto"].sum()
+else:
+    total_empleados = df_empleados["Monto"].sum() if not df_empleados.empty else 0.0
+st.markdown("---")
 
 # --- 7. RESULTADO FINAL (CAJA REAL) --- 
 st.markdown("### Caja Real") 
