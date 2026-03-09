@@ -7,7 +7,8 @@ from streamlit_gsheets import GSheetsConnection
 import streamlit.components.v1 as components 
 
 # --- 1. CONFIGURACIÓN Y LOGIN --- 
-st.set_page_config(page_title="Cierre de Caja - Estancia San Francisco", layout="centered") 
+# Agregamos initial_sidebar_state="collapsed" para que inicie oculta
+st.set_page_config(page_title="Cierre de Caja - Estancia San Francisco", layout="centered", initial_sidebar_state="collapsed") 
 
 # ESCUDO ANTI-CIERRE ACCIDENTAL 
 js_warning = """ 
@@ -57,6 +58,78 @@ try:
     conn = st.connection("gsheets", type=GSheetsConnection) 
 except: 
     st.error("Error de conexión con Google Sheets") 
+
+# --- NUEVO: SIDEBAR DE ANÁLISIS MENSUAL ---
+with st.sidebar:
+    st.title("📊 Análisis de Cierres")
+    st.markdown("Revisa el rendimiento histórico desde la base de datos.")
+    
+    if 'conn' in globals():
+        try:
+            # Traemos la pestaña Historial
+            df_historial = conn.read(worksheet="Historial", ttl=600)
+            
+            if not df_historial.empty and "Fecha" in df_historial.columns:
+                # Convertimos la columna Fecha (texto) a formato de fecha real
+                df_historial["Fecha_dt"] = pd.to_datetime(df_historial["Fecha"], format="%d/%m/%Y", errors="coerce")
+                # Creamos una columna Mes/Año para filtrar
+                df_historial["Mes_Año"] = df_historial["Fecha_dt"].dt.strftime("%m/%Y")
+                
+                # Descartamos filas sin fecha válida
+                df_historial = df_historial.dropna(subset=["Fecha_dt"])
+                
+                meses_disponibles = df_historial["Mes_Año"].unique().tolist()
+                meses_disponibles.sort(reverse=True) # Mostrar el mes más reciente primero
+                
+                if meses_disponibles:
+                    mes_seleccionado = st.selectbox("📅 Seleccionar Mes", meses_disponibles)
+                    
+                    # Filtramos los datos por el mes seleccionado
+                    df_mes = df_historial[df_historial["Mes_Año"] == mes_seleccionado].copy()
+                    
+                    # Convertimos las métricas a números para poder sumarlas
+                    cols_numericas = ["Balanza", "Digital", "Efectivo", "Salidas", "Proveedores", "Diferencia", "Errores"]
+                    for col in cols_numericas:
+                        if col in df_mes.columns:
+                            df_mes[col] = pd.to_numeric(df_mes[col], errors="coerce").fillna(0)
+                    
+                    # Cálculos
+                    tot_balanza = df_mes["Balanza"].sum()
+                    tot_diferencia = df_mes["Diferencia"].sum()
+                    tot_digital = df_mes["Digital"].sum()
+                    tot_efectivo = df_mes["Efectivo"].sum()
+                    tot_salidas = df_mes["Salidas"].sum()
+                    tot_proveedores = df_mes["Proveedores"].sum()
+                    
+                    st.markdown("---")
+                    st.subheader(f"Resumen de {mes_seleccionado}")
+                    
+                    st.metric("Ventas Totales (Balanza)", f"${tot_balanza:,.2f}")
+                    # Color invertido: si hay diferencia positiva (faltante acumulado), se pone rojo.
+                    st.metric("Diferencia de Caja Acumulada", f"${tot_diferencia:,.2f}", delta_color="inverse" if tot_diferencia > 0 else "normal")
+                    
+                    st.markdown("---")
+                    st.markdown("**Desglose de Ingresos**")
+                    st.metric("Total Digitales", f"${tot_digital:,.2f}")
+                    st.metric("Total Efectivo", f"${tot_efectivo:,.2f}")
+                    
+                    st.markdown("---")
+                    st.markdown("**Desglose de Egresos**")
+                    st.metric("Gastos Varios (Salidas)", f"${tot_salidas:,.2f}")
+                    st.metric("Pago a Proveedores", f"${tot_proveedores:,.2f}")
+                    
+                    st.markdown("---")
+                    st.caption(f"📌 Basado en {len(df_mes)} cierres de caja este mes.")
+                    
+                    if st.button("Actualizar Datos 🔄"):
+                        st.cache_data.clear() # Limpia la caché para obligar a Streamlit a leer el Sheets de nuevo
+                        st.rerun()
+                else:
+                    st.info("No hay fechas registradas con el formato correcto (DD/MM/YYYY).")
+            else:
+                st.info("El historial está vacío o no se encontró la columna 'Fecha'.")
+        except Exception as e:
+            st.error(f"Error cargando el análisis: {e}")
 
 # --- 2. CARGA DE DATOS MAESTROS --- 
 lista_proveedores = ["Pan Rustico", "Pan Fresh", "Dharma", "ValMaira", "Aprea", "CocaCola", "Grenn&Co", "Basile Walter", "Otro"] 
@@ -112,6 +185,8 @@ def guardar_todo_en_nube(datos_cierre, df_provs, df_empls):
             df_empl_upd = pd.concat([df_empl_ant, consumos_empl], ignore_index=True).fillna("") 
             conn.update(worksheet="Consumo_Empleados", data=df_empl_upd) 
              
+        # Limpiar caché después de guardar para que el panel lateral se actualice
+        st.cache_data.clear()
         return True 
     except Exception as e: 
         st.error(f"Error guardando en nube: {e}") 
@@ -204,7 +279,6 @@ def input_tabla(titulo, key, solo_monto=False):
     
     return df, (df["Monto"].sum() if not df.empty else 0.0) 
 
-# Variable para trazar la línea gruesa personalizada
 separador_grueso = "<hr style='border: none; height: 4px; background-color: #555555; margin-top: 2rem; margin-bottom: 2rem;'/>"
 
 st.title("Estancia San Francisco") 
