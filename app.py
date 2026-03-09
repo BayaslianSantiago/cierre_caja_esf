@@ -70,8 +70,8 @@ cfg_emp = {
     "Ticket": st.column_config.SelectboxColumn("Tipo", options=["Con Ticket", "Sin Ticket"], required=True),
     "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0) 
 } 
-df_empleados = st.data_editor(st.session_state.df_empleados, column_config=cfg_emp, num_rows="dynamic", use_container_width=True, key="ed_emp", hide_index=True) 
-st.session_state.df_empleados = df_empleados
+df_empleados = st.data_editor(st.session_state.df_empleados.reset_index(drop=True), column_config=cfg_emp, num_rows="dynamic", use_container_width=True, key="ed_emp", hide_index=True) 
+st.session_state.df_empleados = df_empleados.reset_index(drop=True)
 
 # Lógica de Empleados: Solo sumamos los "Con Ticket" al total justificado
 total_empleados = df_empleados[df_empleados["Ticket"] == "Con Ticket"]["Monto"].sum() if not df_empleados.empty and "Ticket" in df_empleados.columns else 0.0
@@ -104,8 +104,8 @@ cfg_prov = {
     "Forma Pago": st.column_config.SelectboxColumn("Método", options=["Efectivo", "Digital / Banco"], required=True), 
     "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0) 
 } 
-df_proveedores = st.data_editor(st.session_state.df_proveedores, column_config=cfg_prov, num_rows="dynamic", use_container_width=True, key="ed_prov", hide_index=True) 
-st.session_state.df_proveedores = df_proveedores
+df_proveedores = st.data_editor(st.session_state.df_proveedores.reset_index(drop=True), column_config=cfg_prov, num_rows="dynamic", use_container_width=True, key="ed_prov", hide_index=True) 
+st.session_state.df_proveedores = df_proveedores.reset_index(drop=True)
 total_prov_efectivo = df_proveedores[df_proveedores["Forma Pago"] == "Efectivo"]["Monto"].sum() if not df_proveedores.empty else 0.0
 
 df_salidas, total_salidas = render_input_tabla("Gastos Varios (Salidas de Caja)", "df_salidas") 

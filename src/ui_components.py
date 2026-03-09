@@ -8,13 +8,18 @@ def render_input_tabla(titulo, session_key, solo_monto=False):
     if not solo_monto: 
         cfg["Descripción"] = st.column_config.TextColumn("Detalle", required=True) 
 
+    # Limpiamos el índice antes de mostrar para evitar la columna extra '0', '1', etc.
+    df_input = st.session_state[session_key].reset_index(drop=True)
+
     df = st.data_editor(
-        st.session_state[session_key], 
+        df_input, 
         column_config=cfg, 
         num_rows="dynamic", 
         use_container_width=True, 
         key=f"ed_{session_key}", 
         hide_index=True
     ) 
-    st.session_state[session_key] = df # Mantener sesión actualizada
-    return df, (df["Monto"].sum() if not df.empty else 0.0) 
+    
+    # Guardamos con el índice reseteado para que no se acumule
+    st.session_state[session_key] = df.reset_index(drop=True)
+    return st.session_state[session_key], (df["Monto"].sum() if not df.empty else 0.0) 
