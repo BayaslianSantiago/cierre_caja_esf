@@ -43,7 +43,10 @@ if not check_password():
 # --- 3. INICIALIZACIÓN DE ESTADO ---
 for key, cols in SESSION_KEYS.items(): 
     if key not in st.session_state: 
-        st.session_state[key] = pd.DataFrame(columns=cols) 
+        # Inicialización limpia sin nombres de índice
+        df_init = pd.DataFrame(columns=cols)
+        df_init.index.name = None
+        st.session_state[key] = df_init
 
 # --- 4. CONEXIONES Y DATOS ---
 conn = get_connection()
@@ -57,7 +60,7 @@ with col_enc1: fecha_input = st.date_input("Fecha", datetime.today())
 with col_enc2: cajero = st.selectbox("Cajero de Turno", LISTA_CAJEROS) 
 st.markdown("---") 
 
-# Tablas de Carga Manual
+# Tablas de Carga Manual (Usando el componente centralizado)
 df_vales, total_vales = render_input_tabla("Vales / Fiados", "df_vales") 
 df_transferencias, total_transf_in = render_input_tabla("Transferencias (Entrantes)", "df_transferencias", solo_monto=True) 
 df_errores, total_errores = render_input_tabla("Errores de Facturación", "df_errores", solo_monto=True) 
@@ -68,14 +71,12 @@ st.markdown("**Mercadería de Empleados**")
 cfg_emp = { 
     "Empleado": st.column_config.SelectboxColumn("Empleado", options=LISTA_EMPLEADOS, required=True), 
     "Ticket": st.column_config.SelectboxColumn("Tipo", options=["Con Ticket", "Sin Ticket"], required=True),
-    "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0, required=True) 
+    "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0, required=True, default=0) 
 } 
-# Usamos lista de registros para estabilidad
-df_empl_edit = st.data_editor(
-    st.session_state.df_empleados.to_dict('records'), 
-    column_config=cfg_emp, num_rows="dynamic", use_container_width=True, key="widget_empl_final", hide_index=True
+df_empleados = st.data_editor(
+    st.session_state.df_empleados, # PASO DIRECTO
+    column_config=cfg_emp, num_rows="dynamic", use_container_width=True, key="editor_empl_final", hide_index=True
 ) 
-df_empleados = pd.DataFrame(df_empl_edit) if df_empl_edit else pd.DataFrame(columns=["Empleado", "Ticket", "Monto"])
 st.session_state.df_empleados = df_empleados
 total_empleados = df_empleados[df_empleados["Ticket"] == "Con Ticket"]["Monto"].fillna(0).sum() if not df_empleados.empty and "Ticket" in df_empleados.columns else 0.0
 
@@ -105,13 +106,12 @@ st.markdown("**Pago a Proveedores**")
 cfg_prov = { 
     "Proveedor": st.column_config.SelectboxColumn("Proveedor", options=lista_proveedores, required=True), 
     "Forma Pago": st.column_config.SelectboxColumn("Método", options=["Efectivo", "Digital / Banco"], required=True), 
-    "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0, required=True) 
+    "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0, required=True, default=0) 
 } 
-df_prov_edit = st.data_editor(
-    st.session_state.df_proveedores.to_dict('records'), 
-    column_config=cfg_prov, num_rows="dynamic", use_container_width=True, key="widget_prov_final", hide_index=True
+df_proveedores = st.data_editor(
+    st.session_state.df_proveedores, # PASO DIRECTO
+    column_config=cfg_prov, num_rows="dynamic", use_container_width=True, key="editor_prov_final", hide_index=True
 ) 
-df_proveedores = pd.DataFrame(df_prov_edit) if df_prov_edit else pd.DataFrame(columns=["Proveedor", "Forma Pago", "Monto"])
 st.session_state.df_proveedores = df_proveedores
 total_prov_efectivo = df_proveedores[df_proveedores["Forma Pago"] == "Efectivo"]["Monto"].fillna(0).sum() if not df_proveedores.empty else 0.0
 
