@@ -68,18 +68,17 @@ st.markdown("**Mercadería de Empleados**")
 cfg_emp = { 
     "Empleado": st.column_config.SelectboxColumn("Empleado", options=LISTA_EMPLEADOS, required=True), 
     "Ticket": st.column_config.SelectboxColumn("Tipo", options=["Con Ticket", "Sin Ticket"], required=True),
-    "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0) 
+    "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0, required=True) 
 } 
-# Usamos el DF de la sesión directamente sin reset_index previo para no romper la referencia del widget
 df_empleados = st.data_editor(
     st.session_state.df_empleados, 
     column_config=cfg_emp, 
     num_rows="dynamic", 
     use_container_width=True, 
-    key="widget_empleados", 
+    key="widget_empleados_root", 
     hide_index=True
 ) 
-st.session_state.df_empleados = df_empleados.reset_index(drop=True)
+st.session_state.df_empleados = df_empleados
 
 # Lógica de Empleados: Solo sumamos los "Con Ticket" al total justificado
 total_empleados = df_empleados[df_empleados["Ticket"] == "Con Ticket"]["Monto"].sum() if not df_empleados.empty and "Ticket" in df_empleados.columns else 0.0
@@ -94,17 +93,17 @@ st.markdown("**Pago a Proveedores**")
 cfg_prov = { 
     "Proveedor": st.column_config.SelectboxColumn("Proveedor", options=lista_proveedores, required=True), 
     "Forma Pago": st.column_config.SelectboxColumn("Método", options=["Efectivo", "Digital / Banco"], required=True), 
-    "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0) 
+    "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0, required=True) 
 } 
 df_proveedores = st.data_editor(
     st.session_state.df_proveedores, 
     column_config=cfg_prov, 
     num_rows="dynamic", 
     use_container_width=True, 
-    key="widget_proveedores", 
+    key="widget_proveedores_root", 
     hide_index=True
 ) 
-st.session_state.df_proveedores = df_proveedores.reset_index(drop=True)
+st.session_state.df_proveedores = df_proveedores
 total_prov_efectivo = df_proveedores[df_proveedores["Forma Pago"] == "Efectivo"]["Monto"].sum() if not df_proveedores.empty else 0.0
 
 df_salidas, total_salidas = render_input_tabla("Gastos Varios (Salidas de Caja)", "df_salidas") 
