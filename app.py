@@ -78,10 +78,8 @@ with st.sidebar:
     
     if 'conn' in globals():
         try:
-            # Traemos la pestana Historial
             df_historial = conn.read(worksheet="Historial", ttl=600)
             
-            # Intentamos traer la hoja de Consumo_Empleados
             try:
                 df_empleados_bd = conn.read(worksheet="Consumo_Empleados", ttl=600)
             except:
@@ -109,7 +107,6 @@ with st.sidebar:
                     st.markdown("---")
                     st.subheader(f"Resumen {mes_seleccionado}")
                     
-                    # --- 1. GRÁFICO DE TORTA (PORCENTAJES) ---
                     st.markdown("**Proporcion: Efectivo vs Digital**")
                     if tot_digital > 0 or tot_efectivo > 0:
                         df_pie = pd.DataFrame({
@@ -126,7 +123,6 @@ with st.sidebar:
                     
                     st.markdown("---")
                     
-                    # --- 2. CONSUMO DE EMPLEADOS ---
                     st.markdown("**Mercaderia por Empleado**")
                     if not df_empleados_bd.empty and "Fecha" in df_empleados_bd.columns:
                         df_empleados_bd["Fecha_dt"] = pd.to_datetime(df_empleados_bd["Fecha"], format="%d/%m/%Y", errors="coerce")
@@ -303,7 +299,8 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
 # --- 6. INTERFAZ UI --- 
 def input_tabla(titulo, key, solo_monto=False): 
     st.markdown(f"**{titulo}**") 
-    cfg = {"Monto": st.column_config.NumberColumn("($)", format="$%d", min_value=0)} 
+    # Cambio clave aquí: format="$%.2f" y step=0.01 para permitir centavos
+    cfg = {"Monto": st.column_config.NumberColumn("($)", format="$%.2f", min_value=0.0, step=0.01)} 
     if not solo_monto: cfg["Descripción"] = st.column_config.TextColumn("Detalle", required=True) 
 
     df = st.data_editor(st.session_state[key], column_config=cfg, num_rows="dynamic", use_container_width=True, key=f"ed_{key}", hide_index=True) 
@@ -337,23 +334,24 @@ df_transferencias, total_transf_in = input_tabla("Transferencias", "df_transfere
 st.markdown(separador_grueso, unsafe_allow_html=True) 
 
 # --- BLOQUE 5: REGISTRADORA, BALANZA Y EFECTIVO ---
-registradora_total = st.number_input("Registradora (Z)", 0.0, step=100.0) 
-balanza_total = st.number_input("Balanza", 0.0, step=100.0) 
+# Agregamos format="%.2f" a todos los inputs manuales
+registradora_total = st.number_input("Registradora (Z)", 0.0, step=100.0, format="%.2f") 
+balanza_total = st.number_input("Balanza", 0.0, step=100.0, format="%.2f") 
 
 with st.expander("Calculadora de Billetes", expanded=False): 
     b20k = st.number_input("$20k", 0); b10k = st.number_input("$10k", 0) 
     b2k = st.number_input("$2k", 0); b1k = st.number_input("$1k", 0) 
     total_fisico = (b20k*20000)+(b10k*10000)+(b2k*2000)+(b1k*1000) 
 
-efectivo_neto = st.number_input("Efectivo", value=float(total_fisico)) 
+efectivo_neto = st.number_input("Efectivo", value=float(total_fisico), format="%.2f") 
 
 st.markdown(separador_grueso, unsafe_allow_html=True) 
 
 # --- BLOQUE 6: COBROS DIGITALES Y TOTAL ---
-mp = st.number_input("Mercado Pago", 0.0)
-nave = st.number_input("Nave", 0.0)
-clover = st.number_input("Clover", 0.0)
-bbva = st.number_input("BBVA", 0.0)
+mp = st.number_input("Mercado Pago", 0.0, format="%.2f")
+nave = st.number_input("Nave", 0.0, format="%.2f")
+clover = st.number_input("Clover", 0.0, format="%.2f")
+bbva = st.number_input("BBVA", 0.0, format="%.2f")
 
 total_digital = mp + nave + clover + bbva 
 st.info(f"**Total Digital: ${total_digital:,.2f}**")
@@ -371,7 +369,7 @@ st.markdown("**Mercaderia de Empleados**")
 cfg_emp = { 
     "Empleado": st.column_config.SelectboxColumn("Empleado", options=lista_empleados, required=True), 
     "Ticket": st.column_config.SelectboxColumn("Tipo", options=["Con Ticket", "Sin Ticket"], required=True),
-    "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0) 
+    "Monto": st.column_config.NumberColumn("Monto ($)", format="$%.2f", min_value=0.0, step=0.01) # Cambio aquí para centavos
 } 
 df_empleados = st.data_editor(st.session_state.df_empleados, column_config=cfg_emp, num_rows="dynamic", use_container_width=True, key="ed_emp", hide_index=True) 
 
@@ -384,7 +382,7 @@ st.markdown("**Pago a Proveedores**")
 cfg_prov = { 
     "Proveedor": st.column_config.SelectboxColumn("Proveedor", options=lista_proveedores, required=True), 
     "Forma Pago": st.column_config.SelectboxColumn("Metodo", options=["Efectivo", "Digital / Banco"], required=True), 
-    "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0) 
+    "Monto": st.column_config.NumberColumn("Monto ($)", format="$%.2f", min_value=0.0, step=0.01) # Cambio aquí para centavos
 } 
 df_proveedores = st.data_editor(st.session_state.df_proveedores, column_config=cfg_prov, num_rows="dynamic", use_container_width=True, key="ed_prov", hide_index=True) 
 total_prov_efectivo = df_proveedores[df_proveedores["Forma Pago"] == "Efectivo"]["Monto"].sum() 
