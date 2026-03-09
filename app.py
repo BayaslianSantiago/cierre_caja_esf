@@ -249,15 +249,7 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
     dibujar_kpi("2. EFECTIVO", efectivo_neto) 
     dibujar_kpi("3. DIGITAL", total_digital) 
     
-    # --- DESGLOSE DIGITAL ---
-    if desglose_digital:
-        pdf.set_font("Arial", '', 9)
-        for pos_nombre, pos_monto in desglose_digital.items():
-            if pos_monto > 0:
-                pdf.cell(130, 5, f"      - {pos_nombre}"); pdf.cell(40, 5, f"$ {pos_monto:,.2f}", align='R', ln=1)
-        pdf.ln(2)
-
-    # --- NUEVO: VS DIGITAL Y EFECTIVO EN PORCENTAJE ---
+    # --- PROPORCION VS DIGITAL Y EFECTIVO (Ahora arriba) ---
     total_ingresos = efectivo_neto + total_digital
     if total_ingresos > 0:
         pct_efec = (efectivo_neto / total_ingresos) * 100
@@ -266,6 +258,14 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
         pdf.set_text_color(100, 100, 100) # Gris oscuro
         pdf.cell(0, 6, f"PROPORCION: Efectivo {pct_efec:.1f}% vs Digital {pct_dig:.1f}%", ln=1, align='C')
         pdf.set_text_color(0, 0, 0) # Volver al color negro normal
+        pdf.ln(2)
+
+    # --- DESGLOSE DIGITAL (Ahora abajo) ---
+    if desglose_digital:
+        pdf.set_font("Arial", '', 9)
+        for pos_nombre, pos_monto in desglose_digital.items():
+            if pos_monto > 0:
+                pdf.cell(130, 5, f"      - {pos_nombre}"); pdf.cell(40, 5, f"$ {pos_monto:,.2f}", align='R', ln=1)
         pdf.ln(2)
      
     pdf.ln(2); pdf.set_font("Arial", '', 10) 
