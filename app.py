@@ -74,7 +74,6 @@ if 'conn' in globals():
         pass 
 
 # --- 3. VARIABLES DE SESIÓN --- 
-# Se eliminaron df_calc_con y df_calc_sin, y df_descuentos ahora solo guarda "Monto"
 session_keys = { 
     'df_salidas': ["Descripción", "Monto"], 
     'df_transferencias': ["Monto"], 
@@ -172,20 +171,19 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
     if not df_transferencias.empty and df_transferencias['Monto'].sum() > 0:
         total_transf_acumulado = df_transferencias['Monto'].sum()
         df_transf_resumida = pd.DataFrame([{"Descripción": "Total transferencias entrantes", "Monto": total_transf_acumulado}])
-        dibujar_tabla("TRANSFERENCIAS (Entrantes)", df_transf_resumida)
+        dibujar_tabla("TRANSFERENCIAS", df_transf_resumida)
         
-    dibujar_tabla("GASTOS VARIOS / SALIDAS", df_salidas) 
-    dibujar_tabla("VALES / FIADOS", df_vales) 
+    dibujar_tabla("SALIDA DE CAJA", df_salidas) 
+    dibujar_tabla("VALES", df_vales) 
     
     if not df_errores.empty and df_errores['Monto'].sum() > 0:
         total_err_acumulado = df_errores['Monto'].sum()
-        df_err_resumido = pd.DataFrame([{"Descripción": "Total errores de facturación registrados", "Monto": total_err_acumulado}])
-        dibujar_tabla("ERRORES DE FACTURACIÓN", df_err_resumido) 
+        df_err_resumido = pd.DataFrame([{"Descripción": "Total errores registrados", "Monto": total_err_acumulado}])
+        dibujar_tabla("ERRORES", df_err_resumido) 
         
-    # Resumen de la tabla "Somos Avellaneda"
     if not df_descuentos.empty and df_descuentos['Monto'].sum() > 0:
         total_desc = df_descuentos['Monto'].sum()
-        df_desc_resumido = pd.DataFrame([{"Descripción": "Total Somos Avellaneda registrado en el turno", "Monto": total_desc}])
+        df_desc_resumido = pd.DataFrame([{"Descripción": "Total Somos Avellaneda", "Monto": total_desc}])
         dibujar_tabla("SOMOS AVELLANEDA", df_desc_resumido)
      
     pdf.ln(5) 
@@ -208,71 +206,76 @@ def input_tabla(titulo, key, solo_monto=False):
 
 st.title("Estancia San Francisco") 
 
+# BLOQUE 1: FECHA Y CAJERO
 col_enc1, col_enc2 = st.columns(2) 
 with col_enc1: fecha_input = st.date_input("Fecha", datetime.today()) 
 with col_enc2: cajero = st.selectbox("Cajero de Turno", lista_cajeros) 
 st.markdown("---") 
 
-# --- TABLAS SIMPLES --- 
-df_vales, total_vales = input_tabla("Vales / Fiados", "df_vales") 
-df_transferencias, total_transf_in = input_tabla("Transferencias (Entrantes)", "df_transferencias", solo_monto=True) 
-df_errores, total_errores = input_tabla("Errores de Facturación", "df_errores", solo_monto=True) 
-
-# NUEVA TABLA: SOMOS AVELLANEDA (solo monto)
-df_descuentos, total_descuentos = input_tabla("Somos Avellaneda", "df_descuentos", solo_monto=True) 
-
-# MERCADERÍA EMPLEADOS 
-st.markdown("**Mercadería de Empleados**") 
-cfg_emp = { 
-    "Empleado": st.column_config.SelectboxColumn("Empleado", options=lista_empleados, required=True), 
-    "Ticket": st.column_config.SelectboxColumn("Tipo", options=["Con Ticket", "Sin Ticket"], required=True),
-    "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0) 
-} 
-
-df_empleados = st.data_editor(st.session_state.df_empleados, column_config=cfg_emp, num_rows="dynamic", use_container_width=True, key="ed_emp", hide_index=True) 
-
-# LÓGICA: Solo sumamos a la caja los que son "Con Ticket"
-if not df_empleados.empty and "Ticket" in df_empleados.columns:
-    total_empleados = df_empleados[df_empleados["Ticket"] == "Con Ticket"]["Monto"].sum()
-else:
-    total_empleados = df_empleados["Monto"].sum() if not df_empleados.empty else 0.0
-
-st.markdown("---")
-
-# EFECTIVO Y DIGITAL 
-col_core1, col_core2 = st.columns(2) 
-with col_core1:  
-    balanza_total = st.number_input("Total Balanza (Venta Real)", 0.0, step=100.0) 
-    registradora_total = st.number_input("Registradora (Z)", 0.0, step=100.0) 
-with col_core2: 
-    with st.expander("Calculadora de Billetes", expanded=False): 
-        b20k = st.number_input("$20k", 0); b10k = st.number_input("$10k", 0) 
-        b2k = st.number_input("$2k", 0); b1k = st.number_input("$1k", 0) 
-        total_fisico = (b20k*20000)+(b10k*10000)+(b2k*2000)+(b1k*1000) 
-    efectivo_neto = st.number_input("Efectivo Total en Caja", value=float(total_fisico)) 
-
-st.markdown("**Cobros Digitales**") 
-cd1, cd2, cd3, cd4 = st.columns(4) 
-mp = cd1.number_input("Mercado Pago", 0.0); nave = cd2.number_input("Nave", 0.0) 
-clover = cd3.number_input("Clover", 0.0); bbva = cd4.number_input("BBVA", 0.0) 
-total_digital = mp + nave + clover + bbva 
+# BLOQUE 2: VALES Y TRANSFERENCIAS
+df_vales, total_vales = input_tabla("Vales", "df_vales") 
+df_transferencias, total_transf_in = input_tabla("Transferencias", "df_transferencias", solo_monto=True) 
 st.markdown("---") 
 
-# PROVEEDORES Y SALIDAS 
-st.markdown("**Pago a Proveedores**") 
-cfg_prov = { 
-    "Proveedor": st.column_config.SelectboxColumn("Proveedor", options=lista_proveedores, required=True), 
-    "Forma Pago": st.column_config.SelectboxColumn("Método", options=["Efectivo", "Digital / Banco"], required=True), 
-    "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0) 
-} 
+# BLOQUE INTERMEDIO: OTRAS OPERACIONES (Para no perder funcionalidad de tus otras tablas)
+with st.expander("Otras Operaciones (Proveedores, Empleados, Somos Avellaneda)"):
+    df_descuentos, total_descuentos = input_tabla("Somos Avellaneda", "df_descuentos", solo_monto=True) 
 
-df_proveedores = st.data_editor(st.session_state.df_proveedores, column_config=cfg_prov, num_rows="dynamic", use_container_width=True, key="ed_prov", hide_index=True) 
-total_prov_efectivo = df_proveedores[df_proveedores["Forma Pago"] == "Efectivo"]["Monto"].sum() 
+    st.markdown("**Mercadería de Empleados**") 
+    cfg_emp = { 
+        "Empleado": st.column_config.SelectboxColumn("Empleado", options=lista_empleados, required=True), 
+        "Ticket": st.column_config.SelectboxColumn("Tipo", options=["Con Ticket", "Sin Ticket"], required=True),
+        "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0) 
+    } 
+    df_empleados = st.data_editor(st.session_state.df_empleados, column_config=cfg_emp, num_rows="dynamic", use_container_width=True, key="ed_emp", hide_index=True) 
+    
+    if not df_empleados.empty and "Ticket" in df_empleados.columns:
+        total_empleados = df_empleados[df_empleados["Ticket"] == "Con Ticket"]["Monto"].sum()
+    else:
+        total_empleados = df_empleados["Monto"].sum() if not df_empleados.empty else 0.0
 
-df_salidas, total_salidas = input_tabla("Gastos Varios (Salidas de Caja)", "df_salidas") 
+    st.markdown("**Pago a Proveedores**") 
+    cfg_prov = { 
+        "Proveedor": st.column_config.SelectboxColumn("Proveedor", options=lista_proveedores, required=True), 
+        "Forma Pago": st.column_config.SelectboxColumn("Método", options=["Efectivo", "Digital / Banco"], required=True), 
+        "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0) 
+    } 
+    df_proveedores = st.data_editor(st.session_state.df_proveedores, column_config=cfg_prov, num_rows="dynamic", use_container_width=True, key="ed_prov", hide_index=True) 
+    total_prov_efectivo = df_proveedores[df_proveedores["Forma Pago"] == "Efectivo"]["Monto"].sum() 
+st.markdown("---")
 
-# --- 7. RESULTADO FINAL --- 
-st.markdown("### Resultado del Cierre") 
+# BLOQUE 3: REGISTRADORA, BALANZA Y EFECTIVO (Uno abajo del otro)
+st.markdown("### Control de Caja Física")
+registradora_total = st.number_input("Registradora (Z)", 0.0, step=100.0) 
+balanza_total = st.number_input("Balanza", 0.0, step=100.0) 
+
+with st.expander("Calculadora de Billetes", expanded=False): 
+    b20k = st.number_input("$20k", 0); b10k = st.number_input("$10k", 0) 
+    b2k = st.number_input("$2k", 0); b1k = st.number_input("$1k", 0) 
+    total_fisico = (b20k*20000)+(b10k*10000)+(b2k*2000)+(b1k*1000) 
+
+efectivo_neto = st.number_input("Efectivo", value=float(total_fisico)) 
+st.markdown("---") 
+
+# BLOQUE 4: DIGITALES Y TOTAL (Uno abajo del otro)
+st.markdown("### Cobros Digitales") 
+mp = st.number_input("Mercado Pago", 0.0)
+nave = st.number_input("Nave", 0.0)
+clover = st.number_input("Clover", 0.0)
+bbva = st.number_input("BBVA", 0.0)
+
+total_digital = mp + nave + clover + bbva 
+st.info(f"**Total Digital: ${total_digital:,.2f}**")
+st.markdown("---") 
+
+# BLOQUE 5: ERRORES Y SALIDAS
+st.markdown("### Ajustes y Salidas")
+df_errores, total_errores = input_tabla("Errores", "df_errores", solo_monto=True) 
+df_salidas, total_salidas = input_tabla("Salida de Caja", "df_salidas") 
+st.markdown("---") 
+
+# --- 7. RESULTADO FINAL (CAJA REAL) --- 
+st.markdown("### Caja Real") 
 
 total_justificado = total_digital + efectivo_neto + total_transf_in + total_salidas + total_prov_efectivo + total_vales + total_empleados + total_errores + total_descuentos
 diferencia = balanza_total - total_justificado 
@@ -281,7 +284,6 @@ c1, c2, c3 = st.columns(3)
 c1.metric("Diferencia", f"${diferencia:,.2f}", delta_color="inverse" if diferencia > 0 else "normal") 
 
 if c2.button("Guardar en Drive", use_container_width=True): 
-    # Calculamos el Estado de la caja
     if diferencia == 0:
         estado_caja = "OK"
     elif diferencia > 0:
@@ -289,7 +291,6 @@ if c2.button("Guardar en Drive", use_container_width=True):
     else:
         estado_caja = "SOBRANTE"
 
-    # Datos completos para Google Sheets
     datos = { 
         "Fecha": fecha_input.strftime("%d/%m/%Y"), 
         "Cajero": cajero, 
@@ -300,7 +301,7 @@ if c2.button("Guardar en Drive", use_container_width=True):
         "Salidas": total_salidas,
         "Vales": total_vales,
         "Errores": total_errores,
-        "Descuentos": total_descuentos, # Sigue guardando en la misma columna de GSheets
+        "Descuentos": total_descuentos, 
         "Proveedores": total_prov_efectivo,
         "Diferencia": diferencia,
         "Estado": estado_caja
