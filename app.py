@@ -8,7 +8,7 @@ from src.auth import check_password
 from src.config import SESSION_KEYS, LISTA_CAJEROS, LISTA_EMPLEADOS
 from src.sheets import get_connection, cargar_proveedores, guardar_cierre
 from src.pdf import generar_pdf_profesional
-from src.ui_components import render_input_tabla, render_calculadora_promos
+from src.ui_components import render_input_tabla
 from src.utils import logger
 
 # --- 1. CONFIGURACIÓN INICIAL --- 
