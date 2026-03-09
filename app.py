@@ -26,7 +26,7 @@ js_warning = """
 """ 
 components.html(js_warning, height=0) 
 
-# Estilos CSS para ocultar elementos de Streamlit
+# Estilos CSS
 st.markdown(""" 
     <style> 
     #MainMenu {visibility: hidden;} 
@@ -57,7 +57,7 @@ with col_enc1: fecha_input = st.date_input("Fecha", datetime.today())
 with col_enc2: cajero = st.selectbox("Cajero de Turno", LISTA_CAJEROS) 
 st.markdown("---") 
 
-# Tablas de Carga
+# Tablas de Carga Manual
 df_vales, total_vales = render_input_tabla("Vales / Fiados", "df_vales") 
 df_transferencias, total_transf_in = render_input_tabla("Transferencias (Entrantes)", "df_transferencias", solo_monto=True) 
 df_errores, total_errores = render_input_tabla("Errores de Facturación", "df_errores", solo_monto=True) 
@@ -70,48 +70,48 @@ cfg_emp = {
     "Ticket": st.column_config.SelectboxColumn("Tipo", options=["Con Ticket", "Sin Ticket"], required=True),
     "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0, required=True) 
 } 
-# Patrón records para evitar el error del índice de la 2da fila
-datos_empleados = st.session_state.df_empleados.to_dict('records')
-df_empleados_edit = st.data_editor(
-    datos_empleados, 
-    column_config=cfg_emp, 
-    num_rows="dynamic", 
-    use_container_width=True, 
-    key="widget_empl_v3", 
-    hide_index=True
+# Usamos lista de registros para estabilidad
+df_empl_edit = st.data_editor(
+    st.session_state.df_empleados.to_dict('records'), 
+    column_config=cfg_emp, num_rows="dynamic", use_container_width=True, key="widget_empl_final", hide_index=True
 ) 
-df_empleados = pd.DataFrame(df_empleados_edit)
+df_empleados = pd.DataFrame(df_empl_edit) if df_empl_edit else pd.DataFrame(columns=["Empleado", "Ticket", "Monto"])
 st.session_state.df_empleados = df_empleados
-
-# Lógica de Empleados: Solo sumamos los "Con Ticket" al total justificado (protegiendo contra None)
-if not df_empleados.empty and "Ticket" in df_empleados.columns:
-    total_empleados = df_empleados[df_empleados["Ticket"] == "Con Ticket"]["Monto"].fillna(0).sum()
-else:
-    total_empleados = 0.0
+total_empleados = df_empleados[df_empleados["Ticket"] == "Con Ticket"]["Monto"].fillna(0).sum() if not df_empleados.empty and "Ticket" in df_empleados.columns else 0.0
 
 st.markdown("---")
 
 # Ventas y Efectivo
-# ... (líneas 80-100 aprox) ...
+col_core1, col_core2 = st.columns(2) 
+with col_core1:  
+    balanza_total = st.number_input("Total Balanza (Venta Real)", 0.0, step=100.0) 
+    registradora_total = st.number_input("Registradora (Z)", 0.0, step=100.0) 
+with col_core2: 
+    with st.expander("Calculadora de Billetes", expanded=False): 
+        b20k = st.number_input("$20k", 0); b10k = st.number_input("$10k", 0) 
+        b2k = st.number_input("$2k", 0); b1k = st.number_input("$1k", 0) 
+        total_fisico = (b20k*20000)+(b10k*10000)+(b2k*2000)+(b1k*1000) 
+    efectivo_neto = st.number_input("Efectivo Total en Caja", value=float(total_fisico)) 
 
-# Proveedores y Gastos
+st.markdown("**Cobros Digitales**") 
+cd1, cd2, cd3, cd4 = st.columns(4) 
+mp = cd1.number_input("Mercado Pago", 0.0); nave = cd2.number_input("Nave", 0.0) 
+clover = cd3.number_input("Clover", 0.0); bbva = cd4.number_input("BBVA", 0.0) 
+total_digital = mp + nave + clover + bbva 
+st.markdown("---") 
+
+# Pago a Proveedores
 st.markdown("**Pago a Proveedores**") 
 cfg_prov = { 
     "Proveedor": st.column_config.SelectboxColumn("Proveedor", options=lista_proveedores, required=True), 
     "Forma Pago": st.column_config.SelectboxColumn("Método", options=["Efectivo", "Digital / Banco"], required=True), 
     "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0, required=True) 
 } 
-# Patrón records para evitar el error del índice de la 2da fila
-datos_proveedores = st.session_state.df_proveedores.to_dict('records')
-df_proveedores_edit = st.data_editor(
-    datos_proveedores, 
-    column_config=cfg_prov, 
-    num_rows="dynamic", 
-    use_container_width=True, 
-    key="widget_prov_v3", 
-    hide_index=True
+df_prov_edit = st.data_editor(
+    st.session_state.df_proveedores.to_dict('records'), 
+    column_config=cfg_prov, num_rows="dynamic", use_container_width=True, key="widget_prov_final", hide_index=True
 ) 
-df_proveedores = pd.DataFrame(df_proveedores_edit)
+df_proveedores = pd.DataFrame(df_prov_edit) if df_prov_edit else pd.DataFrame(columns=["Proveedor", "Forma Pago", "Monto"])
 st.session_state.df_proveedores = df_proveedores
 total_prov_efectivo = df_proveedores[df_proveedores["Forma Pago"] == "Efectivo"]["Monto"].fillna(0).sum() if not df_proveedores.empty else 0.0
 
@@ -120,18 +120,8 @@ df_salidas, total_salidas = render_input_tabla("Gastos Varios (Salidas de Caja)"
 # --- 6. CÁLCULO FINAL --- 
 st.markdown("### Resultado del Cierre") 
 
-# Se suman todos los conceptos que justifican la diferencia con la balanza
-total_justificado = (
-    total_digital + 
-    efectivo_neto + 
-    total_transf_in + 
-    total_salidas + 
-    total_prov_efectivo + 
-    total_vales + 
-    total_empleados + 
-    total_errores + 
-    total_descuentos
-)
+total_justificado = (total_digital + efectivo_neto + total_transf_in + total_salidas + 
+                    total_prov_efectivo + total_vales + total_empleados + total_errores + total_descuentos)
 diferencia = balanza_total - total_justificado 
 
 c1, c2, c3 = st.columns(3) 
@@ -140,34 +130,20 @@ c1.metric("Diferencia", f"${diferencia:,.2f}", delta_color="inverse" if diferenc
 # --- 7. ACCIONES ---
 if c2.button("Guardar en Drive", use_container_width=True): 
     estado_caja = "OK" if diferencia == 0 else ("FALTANTE" if diferencia > 0 else "SOBRANTE")
-    
     datos = { 
-        "Fecha": fecha_input.strftime("%d/%m/%Y"), 
-        "Cajero": cajero, 
-        "Balanza": balanza_total, 
-        "Digital": total_digital, 
-        "Efectivo": efectivo_neto, 
-        "Transferencias": total_transf_in,
-        "Salidas": total_salidas,
-        "Vales": total_vales,
-        "Errores": total_errores,
-        "Descuentos": total_descuentos,
-        "Proveedores": total_prov_efectivo,
-        "Diferencia": diferencia,
-        "Estado": estado_caja
+        "Fecha": fecha_input.strftime("%d/%m/%Y"), "Cajero": cajero, "Balanza": balanza_total, 
+        "Digital": total_digital, "Efectivo": efectivo_neto, "Transferencias": total_transf_in,
+        "Salidas": total_salidas, "Vales": total_vales, "Errores": total_errores,
+        "Descuentos": total_descuentos, "Proveedores": total_prov_efectivo,
+        "Diferencia": diferencia, "Estado": estado_caja
     } 
-    
     if guardar_cierre(conn, datos, df_proveedores, df_empleados): 
-        st.success("Cierre guardado exitosamente en Google Sheets") 
-        st.balloons() 
+        st.success("Cierre guardado exitosamente"); st.balloons() 
 
 if c3.button("Generar PDF", use_container_width=True): 
     desglose = {"MP": mp, "Nave": nave, "Clover": clover, "BBVA": bbva} 
-    pdf_bytes = generar_pdf_profesional(
-        fecha_input, cajero, balanza_total, registradora_total,  
-        total_digital, efectivo_neto, df_salidas, df_transferencias,  
-        df_errores, df_vales, df_descuentos, df_proveedores,  
-        df_empleados, diferencia, desglose
-    ) 
-    if pdf_bytes:
-        st.download_button("Descargar PDF", pdf_bytes, f"Cierre_{fecha_input}.pdf", "application/pdf")
+    pdf_bytes = generar_pdf_profesional(fecha_input, cajero, balanza_total, registradora_total,  
+                                        total_digital, efectivo_neto, df_salidas, df_transferencias,  
+                                        df_errores, df_vales, df_descuentos, df_proveedores,  
+                                        df_empleados, diferencia, desglose) 
+    if pdf_bytes: st.download_button("Descargar PDF", pdf_bytes, f"Cierre_{fecha_input}.pdf", "application/pdf")
