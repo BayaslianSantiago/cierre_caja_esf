@@ -74,16 +74,15 @@ if 'conn' in globals():
         pass 
 
 # --- 3. VARIABLES DE SESIÓN --- 
+# Se eliminaron df_calc_con y df_calc_sin, y df_descuentos ahora solo guarda "Monto"
 session_keys = { 
     'df_salidas': ["Descripción", "Monto"], 
     'df_transferencias': ["Monto"], 
     'df_vales': ["Descripción", "Monto"], 
     'df_errores': ["Monto"], 
-    'df_descuentos': ["Descripción", "Monto"], 
+    'df_descuentos': ["Monto"], 
     'df_proveedores': ["Proveedor", "Forma Pago", "Nro Factura", "Monto"], 
-    'df_empleados': ["Empleado", "Ticket", "Monto"], 
-    'df_calc_con': ["Monto"], 
-    'df_calc_sin': ["Monto"]  
+    'df_empleados': ["Empleado", "Ticket", "Monto"]
 } 
 
 for key, cols in session_keys.items(): 
@@ -169,24 +168,25 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
 
     dibujar_tabla("PAGO A PROVEEDORES", df_proveedores) 
     dibujar_tabla("MERCADERÍA EMPLEADOS", df_empleados) 
-    # --- REEMPLAZA LA LÍNEA DE TRANSFERENCIAS POR ESTO ---
+    
     if not df_transferencias.empty and df_transferencias['Monto'].sum() > 0:
         total_transf_acumulado = df_transferencias['Monto'].sum()
         df_transf_resumida = pd.DataFrame([{"Descripción": "Total transferencias entrantes", "Monto": total_transf_acumulado}])
         dibujar_tabla("TRANSFERENCIAS (Entrantes)", df_transf_resumida)
+        
     dibujar_tabla("GASTOS VARIOS / SALIDAS", df_salidas) 
     dibujar_tabla("VALES / FIADOS", df_vales) 
-    # --- REEMPLÁZALA POR ESTO ---
+    
     if not df_errores.empty and df_errores['Monto'].sum() > 0:
         total_err_acumulado = df_errores['Monto'].sum()
-        # Creamos un pequeño DataFrame temporal de un solo renglón
         df_err_resumido = pd.DataFrame([{"Descripción": "Total errores de facturación registrados", "Monto": total_err_acumulado}])
         dibujar_tabla("ERRORES DE FACTURACIÓN", df_err_resumido) 
-    # Resumimos todos los descuentos en un solo renglón para no ocupar espacio
+        
+    # Resumen de la tabla "Somos Avellaneda"
     if not df_descuentos.empty and df_descuentos['Monto'].sum() > 0:
         total_desc = df_descuentos['Monto'].sum()
-        df_desc_resumido = pd.DataFrame([{"Descripción": "Total descuentos aplicados en el turno", "Monto": total_desc}])
-        dibujar_tabla("DESCUENTOS Y PROMOS", df_desc_resumido)
+        df_desc_resumido = pd.DataFrame([{"Descripción": "Total Somos Avellaneda registrado en el turno", "Monto": total_desc}])
+        dibujar_tabla("SOMOS AVELLANEDA", df_desc_resumido)
      
     pdf.ln(5) 
     estado, color_texto = ("FALTANTE", (200, 0, 0)) if diferencia > 0 else ("SOBRANTE", (0, 100, 0)) 
@@ -202,7 +202,6 @@ def input_tabla(titulo, key, solo_monto=False):
     cfg = {"Monto": st.column_config.NumberColumn("($)", format="$%d", min_value=0)} 
     if not solo_monto: cfg["Descripción"] = st.column_config.TextColumn("Detalle", required=True) 
 
-    # Al no reescribir manualmente st.session_state[key], Streamlit deja de robar el foco
     df = st.data_editor(st.session_state[key], column_config=cfg, num_rows="dynamic", use_container_width=True, key=f"ed_{key}", hide_index=True) 
     
     return df, (df["Monto"].sum() if not df.empty else 0.0) 
@@ -214,70 +213,13 @@ with col_enc1: fecha_input = st.date_input("Fecha", datetime.today())
 with col_enc2: cajero = st.selectbox("Cajero de Turno", lista_cajeros) 
 st.markdown("---") 
 
-# --- NUEVA FUNCIONALIDAD: CALCULADORA DE PROMOS --- 
-es_dia_promo = fecha_input.weekday() in [0, 2] # 0=Lunes, 2=Miércoles 
-if es_dia_promo: 
-    st.info("Hoy hay Somos Avellaneda (10% / 15%)") 
-    with st.popover("Somos Avellaneda"): 
-        st.write("Ingrese los valores de los importes de los productos para el descuento:                                           ") 
-         
-        s_dto, c_dto = st.columns(2) 
-
-        with s_dto: 
-            st.markdown("**SIN Descuento**") 
-            df_calc_sin = st.data_editor(st.session_state['df_calc_sin'], column_config={"Monto": st.column_config.NumberColumn("Importe ($)", min_value=0.0)}, num_rows="dynamic", key="calc_sin", use_container_width=True, hide_index=True) 
-            monto_sin_dto = df_calc_sin["Monto"].sum() if not df_calc_sin.empty else 0.0 
-            st.caption(f"Subtotal: ${monto_sin_dto:,.2f}") 
-        
-        with c_dto: 
-            st.markdown("**CON Descuento**") 
-            df_calc_con = st.data_editor(st.session_state['df_calc_con'], column_config={"Monto": st.column_config.NumberColumn("Importe ($)", min_value=0.0)}, num_rows="dynamic", key="calc_con", use_container_width=True, hide_index=True) 
-            monto_con_dto = df_calc_con["Monto"].sum() if not df_calc_con.empty else 0.0 
-            st.caption(f"Subtotal: ${monto_con_dto:,.2f}") 
-
-        st.markdown("---") 
-        tipo_dto = st.radio("Porcentaje de Tarjeta", [0.10, 0.15], format_func=lambda x: f"{int(x*100)}%", horizontal=True) 
-         
-        calculo_descuento = monto_con_dto * tipo_dto 
-        total_a_cobrar = (monto_con_dto - calculo_descuento) + monto_sin_dto 
-        ticket_sin_descuento = monto_con_dto + monto_sin_dto
-        
-        st.markdown(f"### Ticket Sin Descuento: **${ticket_sin_descuento}**")
-        st.markdown(f"### Cobrar: **${total_a_cobrar:,.2f}**")
-        st.caption(f"Descuento: ${calculo_descuento:,.2f}") 
-         
-        if st.button("Agregar descuento a la caja", use_container_width=True): 
-            if calculo_descuento > 0: 
-                # Tomamos la tabla de descuentos más reciente (que incluye las ediciones manuales)
-                base_df = st.session_state.get("latest_df_descuentos", st.session_state.df_descuentos)
-                
-                # Le pegamos el nuevo cálculo
-                nueva_fila = pd.DataFrame([{"Descripción": f"Promo {int(tipo_dto*100)}% Tarjeta", "Monto": calculo_descuento}]) 
-                st.session_state.df_descuentos = pd.concat([base_df, nueva_fila], ignore_index=True) 
-                 
-                # Vaciamos la calculadora para el próximo cliente 
-                st.session_state['df_calc_con'] = pd.DataFrame(columns=["Monto"]) 
-                st.session_state['df_calc_sin'] = pd.DataFrame(columns=["Monto"]) 
-                
-                # Limpiamos los widgets gráficos para que se re-dibujen correctamente
-                for widget_key in ["calc_con", "calc_sin", "ed_df_descuentos"]:
-                    if widget_key in st.session_state:
-                        del st.session_state[widget_key]
-                 
-                st.toast("Cobro registrado. Calculadora limpia.", icon="✅") 
-                st.rerun() 
-            else: 
-                st.warning("No hay importes con descuento para aplicar.") 
-
-# --- RESTO DE TABLAS --- 
+# --- TABLAS SIMPLES --- 
 df_vales, total_vales = input_tabla("Vales / Fiados", "df_vales") 
 df_transferencias, total_transf_in = input_tabla("Transferencias (Entrantes)", "df_transferencias", solo_monto=True) 
-
 df_errores, total_errores = input_tabla("Errores de Facturación", "df_errores", solo_monto=True) 
 
-# Descuentos tiene un tratamiento especial para poder mezclarse con la calculadora sin romperse
-df_descuentos, total_descuentos = input_tabla("Descuentos Promocionales", "df_descuentos") 
-st.session_state["latest_df_descuentos"] = df_descuentos
+# NUEVA TABLA: SOMOS AVELLANEDA (solo monto)
+df_descuentos, total_descuentos = input_tabla("Somos Avellaneda", "df_descuentos", solo_monto=True) 
 
 # MERCADERÍA EMPLEADOS 
 st.markdown("**Mercadería de Empleados**") 
@@ -358,12 +300,12 @@ if c2.button("Guardar en Drive", use_container_width=True):
         "Salidas": total_salidas,
         "Vales": total_vales,
         "Errores": total_errores,
-        "Descuentos": total_descuentos,
+        "Descuentos": total_descuentos, # Sigue guardando en la misma columna de GSheets
         "Proveedores": total_prov_efectivo,
         "Diferencia": diferencia,
         "Estado": estado_caja
     } 
-    
+     
     if guardar_todo_en_nube(datos, df_proveedores, df_empleados): 
         st.success("Guardado exitoso") 
         st.balloons() 
