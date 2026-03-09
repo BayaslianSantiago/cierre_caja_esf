@@ -249,12 +249,23 @@ def generar_pdf_profesional(fecha, cajero, balanza, registradora, total_digital,
     dibujar_kpi("2. EFECTIVO", efectivo_neto) 
     dibujar_kpi("3. DIGITAL", total_digital) 
     
-    # --- NUEVO: DESGLOSE DIGITAL EN EL PDF ---
+    # --- DESGLOSE DIGITAL ---
     if desglose_digital:
         pdf.set_font("Arial", '', 9)
         for pos_nombre, pos_monto in desglose_digital.items():
             if pos_monto > 0:
                 pdf.cell(130, 5, f"      - {pos_nombre}"); pdf.cell(40, 5, f"$ {pos_monto:,.2f}", align='R', ln=1)
+        pdf.ln(2)
+
+    # --- NUEVO: VS DIGITAL Y EFECTIVO EN PORCENTAJE ---
+    total_ingresos = efectivo_neto + total_digital
+    if total_ingresos > 0:
+        pct_efec = (efectivo_neto / total_ingresos) * 100
+        pct_dig = (total_digital / total_ingresos) * 100
+        pdf.set_font("Arial", 'B', 10)
+        pdf.set_text_color(100, 100, 100) # Gris oscuro
+        pdf.cell(0, 6, f"PROPORCION: Efectivo {pct_efec:.1f}% vs Digital {pct_dig:.1f}%", ln=1, align='C')
+        pdf.set_text_color(0, 0, 0) # Volver al color negro normal
         pdf.ln(2)
      
     pdf.ln(2); pdf.set_font("Arial", '', 10) 
@@ -431,7 +442,6 @@ if c2.button("Guardar en Drive", use_container_width=True):
         st.success("Guardado exitoso") 
 
 if c3.button("Generar PDF", use_container_width=True): 
-    # Aquí definimos cómo se verán los nombres en el PDF
     desglose = {"Mercado Pago": mp, "Nave": nave, "Clover": clover, "BBVA": bbva} 
     pdf_bytes = generar_pdf_profesional(fecha_input, cajero, balanza_total, registradora_total,  
                                         total_digital, efectivo_neto, df_salidas, df_transferencias,  
