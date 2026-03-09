@@ -41,12 +41,11 @@ if not check_password():
     st.stop() 
 
 # --- 3. INICIALIZACIÓN DE ESTADO ---
-for key, cols in SESSION_KEYS.items(): 
+# Usamos listas vacías de Python para los componentes de edición.
+# Esto previene problemas de índice.
+for key in SESSION_KEYS.keys(): 
     if key not in st.session_state: 
-        # Inicialización limpia sin nombres de índice
-        df_init = pd.DataFrame(columns=cols)
-        df_init.index.name = None
-        st.session_state[key] = df_init
+        st.session_state[key] = [] # Iniciamos como lista pura
 
 # --- 4. CONEXIONES Y DATOS ---
 conn = get_connection()
@@ -60,25 +59,29 @@ with col_enc1: fecha_input = st.date_input("Fecha", datetime.today())
 with col_enc2: cajero = st.selectbox("Cajero de Turno", LISTA_CAJEROS) 
 st.markdown("---") 
 
-# Tablas de Carga Manual (Usando el componente centralizado)
+# Tablas de Carga Manual (Basadas en listas)
 df_vales, total_vales = render_input_tabla("Vales / Fiados", "df_vales") 
 df_transferencias, total_transf_in = render_input_tabla("Transferencias (Entrantes)", "df_transferencias", solo_monto=True) 
 df_errores, total_errores = render_input_tabla("Errores de Facturación", "df_errores", solo_monto=True) 
 df_descuentos, total_descuentos = render_input_tabla("Somos Avellaneda (Descuentos)", "df_descuentos", solo_monto=True) 
 
-# Mercadería de Empleados
+# Mercadería de Empleados (Con lógica de lista pura)
 st.markdown("**Mercadería de Empleados**") 
 cfg_emp = { 
     "Empleado": st.column_config.SelectboxColumn("Empleado", options=LISTA_EMPLEADOS, required=True), 
     "Ticket": st.column_config.SelectboxColumn("Tipo", options=["Con Ticket", "Sin Ticket"], required=True),
     "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0, required=True, default=0) 
 } 
-df_empleados = st.data_editor(
-    st.session_state.df_empleados, # PASO DIRECTO
-    column_config=cfg_emp, num_rows="dynamic", use_container_width=True, key="editor_empl_final", hide_index=True
+res_empl = st.data_editor(
+    st.session_state.df_empleados, # ES UNA LISTA
+    column_config=cfg_emp, num_rows="dynamic", use_container_width=True, key="list_editor_empl", hide_index=True
 ) 
-st.session_state.df_empleados = df_empleados
-total_empleados = df_empleados[df_empleados["Ticket"] == "Con Ticket"]["Monto"].fillna(0).sum() if not df_empleados.empty and "Ticket" in df_empleados.columns else 0.0
+st.session_state.df_empleados = res_empl
+df_empleados = pd.DataFrame(res_empl)
+if not df_empleados.empty and "Ticket" in df_empleados.columns:
+    total_empleados = df_empleados[df_empleados["Ticket"] == "Con Ticket"]["Monto"].fillna(0).sum()
+else:
+    total_empleados = 0.0
 
 st.markdown("---")
 
@@ -101,20 +104,22 @@ clover = cd3.number_input("Clover", 0.0); bbva = cd4.number_input("BBVA", 0.0)
 total_digital = mp + nave + clover + bbva 
 st.markdown("---") 
 
-# Pago a Proveedores
+# Pago a Proveedores (Con lógica de lista pura)
 st.markdown("**Pago a Proveedores**") 
 cfg_prov = { 
     "Proveedor": st.column_config.SelectboxColumn("Proveedor", options=lista_proveedores, required=True), 
     "Forma Pago": st.column_config.SelectboxColumn("Método", options=["Efectivo", "Digital / Banco"], required=True), 
     "Monto": st.column_config.NumberColumn("Monto ($)", format="$%d", min_value=0, required=True, default=0) 
 } 
-df_proveedores = st.data_editor(
-    st.session_state.df_proveedores, # PASO DIRECTO
-    column_config=cfg_prov, num_rows="dynamic", use_container_width=True, key="editor_prov_final", hide_index=True
+res_prov = st.data_editor(
+    st.session_state.df_proveedores, # ES UNA LISTA
+    column_config=cfg_prov, num_rows="dynamic", use_container_width=True, key="list_editor_prov", hide_index=True
 ) 
-st.session_state.df_proveedores = df_proveedores
+st.session_state.df_proveedores = res_prov
+df_proveedores = pd.DataFrame(res_prov)
 total_prov_efectivo = df_proveedores[df_proveedores["Forma Pago"] == "Efectivo"]["Monto"].fillna(0).sum() if not df_proveedores.empty else 0.0
 
+# Gastos Varios (Usando el componente centralizado de lista)
 df_salidas, total_salidas = render_input_tabla("Gastos Varios (Salidas de Caja)", "df_salidas") 
 
 # --- 6. CÁLCULO FINAL --- 
@@ -137,6 +142,7 @@ if c2.button("Guardar en Drive", use_container_width=True):
         "Descuentos": total_descuentos, "Proveedores": total_prov_efectivo,
         "Diferencia": diferencia, "Estado": estado_caja
     } 
+    # Enviamos los DataFrames resultantes a la lógica de guardado
     if guardar_cierre(conn, datos, df_proveedores, df_empleados): 
         st.success("Cierre guardado exitosamente"); st.balloons() 
 
